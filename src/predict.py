@@ -1,21 +1,26 @@
-import pandas as pd
 import joblib
+import pandas as pd
+from src.features import add_features
 
-model = joblib.load("models/long_model.pkl")
+MODEL_PATH = "models/long_model.pkl"
 
-feature_cols = [
+FEATURE_COLS = [
     "ret_1","ret_5","ret_21",
     "mom_63","mom_126",
     "vol_21","vol_63",
     "ma_ratio_21_63","drawdown_63"
 ]
 
+model = joblib.load(MODEL_PATH)
+
 def predict_latest(df):
-    X = df[feature_cols].tail(1)
+
+    df = add_features(df)
+    df = df.dropna()
+
+    X = df[FEATURE_COLS].tail(1)
+
     proba = model.predict_proba(X)[0,1]
-    score_up = 1 - proba
+    direction = "OUTPERFORM" if proba >= 0.5 else "UNDERPERFORM"
 
-    direction = "UP" if score_up > 0.5 else "DOWN"
-    confidence = score_up if score_up > 0.5 else 1 - score_up
-
-    return direction, confidence
+    return direction, float(proba)

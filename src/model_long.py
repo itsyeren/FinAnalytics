@@ -1,16 +1,26 @@
 """
-Institutional Cross-Sectional Long Model (Mean Reversion)
-=========================================================
+LONG MODEL (63-Day Relative Outperformance Classification)
+==========================================================
 
-- Target: Cross-sectional relative forward return
-- Model: LightGBM Regressor
-- Strategy: MEAN REVERSION
-- Validation: Walk-forward
-- Metrics:
-    - IC (direction corrected)
-    - Top5 mean return (lowest predicted)
-    - Bottom5 mean return (highest predicted)
-    - Long-Short spread
+Goal:
+Predict whether a stock will outperform the cross-sectional
+market average over next 63 trading days.
+
+Label:
+y = 1  if fwd_ret > market_fwd_ret
+y = 0  otherwise
+
+Model:
+LightGBM Classifier
+
+Output:
+- AUC
+- Balanced Accuracy
+- Top5 forward relative return
+- Best 5 stocks by model quality
+
+Saved as:
+models/long_model.pkl
 """
 
 import os
@@ -20,8 +30,9 @@ import joblib
 import numpy as np
 import pandas as pd
 from pathlib import Path
-from lightgbm import LGBMRegressor
-from scipy.stats import spearmanr
+from lightgbm import LGBMClassifier
+from sklearn.metrics import roc_auc_score, balanced_accuracy_score
+
 
 # =========================
 # PATH
@@ -31,67 +42,72 @@ sys.path.append(str(PROJECT_ROOT))
 
 from src.config import UNIVERSE
 from src.features import add_features
-from src.labels_long import add_long_score
 
 
 # =========================
 # CONFIG
 # =========================
-class Config:
+DATA_PATH = PROJECT_ROOT / "data/raw/D1"
+MODEL_PATH = PROJECT_ROOT / "models/long_model.pkl"
 
-    DATA_PATH = PROJECT_ROOT / "data/raw/D1"
-    MODEL_DIR = PROJECT_ROOT / "models"
+FEATURE_COLS = [
+    "ret_1","ret_5","ret_21",
+    "mom_63","mom_126",
+    "vol_21","vol_63",
+    "ma_ratio_21_63",
+    "drawdown_63"
+]
 
-    MIN_DATE = "2010-01-04"
+HORIZON = 63
+MIN_TRAIN_DAYS = 756
+TEST_DAYS = 126
+STEP_DAYS = 126   # faster folds
 
-    FEATURE_COLS = [
-        "ret_1","ret_5","ret_21",
-        "mom_63","mom_126",
-        "vol_21","vol_63",
-        "ma_ratio_21_63",
-        "drawdown_63"
-    ]
-
-    MIN_TRAIN_DAYS = 756
-    TEST_DAYS = 126
-    STEP_DAYS = 63
-
-    LGBM_PARAMS = dict(
-        n_estimators=600,
-        learning_rate=0.03,
-        num_leaves=31,
-        subsample=0.8,
-        colsample_bytree=0.8,
-        random_state=42,
-        n_jobs=-1
-    )
+MODEL_PARAMS = dict(
+    n_estimators=300,
+    learning_rate=0.05,
+    num_leaves=31,
+    subsample=0.8,
+    colsample_bytree=0.8,
+    random_state=42,
+    n_jobs=-1,
+    class_weight="balanced"
+)
 
 
 # =========================
 # DATA LOAD
 # =========================
 def load_data():
-
-    files = glob.glob(str(Config.DATA_PATH / "*.US_D1.csv"))
-    available = {
-        os.path.basename(f).split(".")[0]
-        for f in files
-    }
-
+    files = glob.glob(str(DATA_PATH / "*.US_D1.csv"))
+    available = {os.path.basename(f).split(".")[0] for f in files}
     tickers = [t for t in UNIVERSE if t in available]
 
     dfs = []
-
     for t in tickers:
-        df_tmp = pd.read_csv(Config.DATA_PATH / f"{t}.US_D1.csv")
-        df_tmp["ticker"] = t
-        dfs.append(df_tmp)
+        d = pd.read_csv(DATA_PATH / f"{t}.US_D1.csv")
+        d["ticker"] = t
+        dfs.append(d)
 
     df = pd.concat(dfs, ignore_index=True)
-
     df["datetime"] = pd.to_datetime(df["datetime"])
-    df = df[df["datetime"] >= Config.MIN_DATE]
     df = df.sort_values(["ticker","datetime"]).reset_index(drop=True)
+    return df
+
+
+# =========================
+# LABEL (Relative)
+# =========================
+def add_label(df):
+    df = df.copy()
+
+    df["fwd_close"] = df.groupby("ticker")["close"].shift(-HORIZON)
+    df["fwd_ret"] = df["fwd_close"] / df["close"] - 1
+
+    # Cross-sectional market forward return
+    df["mkt_fwd_ret"] = df.groupby("datetime")["fwd_ret"].transform("mean")
+
+    df["y"] = (df["fwd_ret"] > df["mkt_fwd_ret"]).astype(int)
 
     return df
 
@@ -100,46 +116,35 @@ def load_data():
 # WALK FORWARD
 # =========================
 def create_splits(df):
-
     dates = pd.Index(df["datetime"].unique()).sort_values()
-
     splits = []
 
-    for i in range(
-        Config.MIN_TRAIN_DAYS,
-        len(dates) - Config.TEST_DAYS,
-        Config.STEP_DAYS
-    ):
+    for i in range(MIN_TRAIN_DAYS, len(dates) - TEST_DAYS, STEP_DAYS):
         train_end = dates[i - 1]
         test_start = dates[i]
-        test_end = dates[i + Config.TEST_DAYS - 1]
+        test_end = dates[i + TEST_DAYS - 1]
         splits.append((train_end, test_start, test_end))
 
     return splits
 
 
 # =========================
-# MAIN TRAIN
+# TRAIN
 # =========================
-def train_model():
+def train():
 
     print("="*60)
-    print("INSTITUTIONAL MEAN REVERSION MODEL")
+    print("LONG MODEL — 63 DAY RELATIVE OUTPERFORM")
     print("="*60)
 
     df = load_data()
-
     df = add_features(df)
-    df = add_long_score(df)
+    df = add_label(df)
 
-    df = df.dropna(subset=Config.FEATURE_COLS + ["ret_long_norm"])
+    df = df.dropna(subset=FEATURE_COLS + ["y","fwd_ret"]).reset_index(drop=True)
 
-    # ===== RELATIVE TARGET =====
-    df["target_rel"] = df["ret_long_norm"] - \
-        df.groupby("datetime")["ret_long_norm"].transform("mean")
-
-    # ===== CROSS-SECTIONAL NORMALIZATION =====
-    for col in Config.FEATURE_COLS:
+    # Cross-sectional feature normalization
+    for col in FEATURE_COLS:
         df[col] = df.groupby("datetime")[col].transform(
             lambda x: (x - x.mean()) / (x.std() + 1e-8)
         )
@@ -147,85 +152,73 @@ def train_model():
     splits = create_splits(df)
     print("Folds:", len(splits))
 
-    ic_list = []
+    auc_list = []
+    bacc_list = []
     top5_list = []
-    bottom5_list = []
-    spread_list = []
+    all_preds = []
 
     for k, (train_end, test_start, test_end) in enumerate(splits):
 
-        train = df[df["datetime"] <= train_end]
-        test = df[
-            (df["datetime"] >= test_start) &
-            (df["datetime"] <= test_end)
-        ]
+        train_df = df[df["datetime"] <= train_end]
+        test_df = df[(df["datetime"] >= test_start) & (df["datetime"] <= test_end)].copy()
 
-        X_train = train[Config.FEATURE_COLS]
-        y_train = train["target_rel"]
+        model = LGBMClassifier(**MODEL_PARAMS)
+        model.fit(train_df[FEATURE_COLS], train_df["y"])
 
-        X_test = test[Config.FEATURE_COLS]
-        y_test = test["target_rel"]
+        proba_up = model.predict_proba(test_df[FEATURE_COLS])[:,1]
+        pred = (proba_up >= 0.5).astype(int)
 
-        model = LGBMRegressor(**Config.LGBM_PARAMS)
-        model.fit(X_train, y_train)
+        auc = roc_auc_score(test_df["y"], proba_up)
+        bacc = balanced_accuracy_score(test_df["y"], pred)
 
-        preds = model.predict(X_test)
+        auc_list.append(auc)
+        bacc_list.append(bacc)
 
-        test = test.copy()
-        test["pred"] = preds
+        test_df["p_up"] = proba_up
+        all_preds.append(test_df[["datetime","ticker","p_up","fwd_ret","y"]])
 
-        # ===== IC (direction corrected) =====
-        ic = -spearmanr(preds, y_test).correlation
-        ic_list.append(ic)
-
-        # ===== MEAN REVERSION RANKING =====
+        # Top5 outperform candidates
         daily_top5 = []
-        daily_bottom5 = []
+        for _, g in test_df.groupby("datetime"):
+            g = g.sort_values("p_up", ascending=False).head(5)
+            daily_top5.append(g["fwd_ret"].mean())
 
-        for date, group in test.groupby("datetime"):
-
-            # IMPORTANT: ascending=True
-            group_sorted = group.sort_values("pred", ascending=True)
-
-            top5 = group_sorted.head(5)      # lowest prediction
-            bottom5 = group_sorted.tail(5)  # highest prediction
-
-            daily_top5.append(top5["ret_long_norm"].mean())
-            daily_bottom5.append(bottom5["ret_long_norm"].mean())
-
-        top5_mean = np.mean(daily_top5)
-        bottom5_mean = np.mean(daily_bottom5)
-        spread = top5_mean - bottom5_mean
-
+        top5_mean = float(np.mean(daily_top5))
         top5_list.append(top5_mean)
-        bottom5_list.append(bottom5_mean)
-        spread_list.append(spread)
 
-        print(f"Fold {k} | IC: {ic:.4f} | Spread: {spread:.4f}")
+        print(f"Fold {k:02d} | AUC {auc:.3f} | BAcc {bacc:.3f} | Top5Ret {top5_mean:.3f}")
 
     print("-"*60)
-    print("AVG IC:", np.mean(ic_list), "±", np.std(ic_list))
-    print("AVG TOP5:", np.mean(top5_list))
-    print("AVG BOTTOM5:", np.mean(bottom5_list))
-    print("AVG SPREAD:", np.mean(spread_list))
+    print("AVG AUC:", np.mean(auc_list))
+    print("AVG Balanced Acc:", np.mean(bacc_list))
+    print("AVG Top5 Forward Return:", np.mean(top5_list))
     print("-"*60)
 
-    # ===== FINAL MODEL =====
-    final_model = LGBMRegressor(**Config.LGBM_PARAMS)
-    final_model.fit(
-        df[Config.FEATURE_COLS],
-        df["target_rel"]
+    # Combine predictions
+    oos = pd.concat(all_preds, ignore_index=True)
+
+    stock_quality = (
+        oos.groupby("ticker")
+        .agg(
+            avg_p_up=("p_up","mean"),
+            hit_rate=("y","mean"),
+            mean_fwd_ret=("fwd_ret","mean")
+        )
+        .sort_values("avg_p_up", ascending=False)
     )
 
-    Config.MODEL_DIR.mkdir(exist_ok=True)
-    model_path = Config.MODEL_DIR / "long_model_reg.pkl"
-    joblib.dump(final_model, model_path)
+    print("\n===== BEST 5 STOCKS BY MODEL =====")
+    print(stock_quality.head(5))
 
-    print("Model saved:", model_path)
+    # Final model
+    final_model = LGBMClassifier(**MODEL_PARAMS)
+    final_model.fit(df[FEATURE_COLS], df["y"])
+
+    MODEL_PATH.parent.mkdir(exist_ok=True)
+    joblib.dump(final_model, MODEL_PATH)
+
+    print("\nModel saved:", MODEL_PATH)
 
 
-# =========================
-# ENTRY
-# =========================
 if __name__ == "__main__":
-    train_model()
+    train()
