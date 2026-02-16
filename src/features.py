@@ -1,114 +1,57 @@
-import pandas as pd
 import numpy as np
+import pandas as pd
 
-def add_features(df: pd.DataFrame) -> pd.DataFrame:
+def add_features(df: pd.DataFrame, normalize: bool = True) -> pd.DataFrame:
+    """
+    Calculates the simplified feature set for the Long-Term Model.
+    Includes technical indicators and daily cross-sectional normalization.
+    """
     df = df.copy()
-    df = df.sort_values(["ticker", "datetime"])
+    df["datetime"] = pd.to_datetime(df["datetime"])
+    df = df.sort_values(["ticker", "datetime"]).reset_index(drop=True)
 
-    # =============================
-    # RETURNS
-    # =============================
-    df["ret_1"] = df.groupby("ticker")["close"].pct_change()
-    df["ret_5"] = df.groupby("ticker")["close"].pct_change(5)
+    # --- 1. Momentum & Returns ---
+    # ret_21: 1-month price change
     df["ret_21"] = df.groupby("ticker")["close"].pct_change(21)
-
-    df["mom_63"] = df.groupby("ticker")["close"].pct_change(63)
+    # mom_126: 6-month price change (Structural momentum)
     df["mom_126"] = df.groupby("ticker")["close"].pct_change(126)
 
-    # =============================
-    # VOLATILITY
-    # =============================
-    df["vol_21"] = (
-        df.groupby("ticker")["ret_1"]
-        .rolling(21).std()
-        .reset_index(level=0, drop=True)
-    )
+    # --- 2. Trend Structure ---
+    # ma_ratio_21_63: Ratio of short-term to medium-term trend
+    sma_21 = df.groupby("ticker")["close"].rolling(21).mean().reset_index(level=0, drop=True)
+    sma_63 = df.groupby("ticker")["close"].rolling(63).mean().reset_index(level=0, drop=True)
+    df["ma_ratio_21_63"] = sma_21 / (sma_63 + 1e-8)
 
-    df["vol_63"] = (
-        df.groupby("ticker")["ret_1"]
-        .rolling(63).std()
-        .reset_index(level=0, drop=True)
-    )
+    # drawdown_63: Distance from the 3-month high
+    rolling_max_63 = df.groupby("ticker")["close"].rolling(63).max().reset_index(level=0, drop=True)
+    df["drawdown_63"] = df["close"] / (rolling_max_63 + 1e-8) - 1
 
-    # =============================
-    # TREND STRUCTURE
-    # =============================
-    ma_21 = (
-        df.groupby("ticker")["close"]
-        .rolling(21).mean()
-        .reset_index(level=0, drop=True)
-    )
+    # dist_sma_200: Distance from the 200-day moving average (Major pivot)
+    sma_200 = df.groupby("ticker")["close"].rolling(200).mean().reset_index(level=0, drop=True)
+    df["dist_sma_200"] = (df["close"] - sma_200) / (sma_200 + 1e-8)
 
-    ma_63 = (
-        df.groupby("ticker")["close"]
-        .rolling(63).mean()
-        .reset_index(level=0, drop=True)
-    )
+    # sma50_slope20: Velocity of the 50-day trend
+    sma_50 = df.groupby("ticker")["close"].rolling(50).mean().reset_index(level=0, drop=True)
+    sma_50_lag20 = sma_50.groupby(df["ticker"]).shift(20)
+    df["sma50_slope20"] = (sma_50 - sma_50_lag20) / (np.abs(sma_50_lag20) + 1e-8)
 
-    df["ma_ratio_21_63"] = ma_21 / ma_63
+    # --- 3. Market Regime ---
+    # mkt_ret_63: 3-month performance of the equal-weighted universe
+    mkt = df.pivot_table(index="datetime", columns="ticker", values="close").mean(axis=1).to_frame("mkt_close")
+    mkt["mkt_ret_63"] = mkt["mkt_close"].pct_change(63)
 
-    rolling_max_63 = (
-        df.groupby("ticker")["close"]
-        .rolling(63).max()
-        .reset_index(level=0, drop=True)
-    )
+    df = df.merge(mkt[["mkt_ret_63"]], left_on="datetime", right_index=True, how="left")
 
-    df["drawdown_63"] = df["close"] / rolling_max_63 - 1
-
-    # =============================
-    # OSCILLATORS (MEAN REVERSION CORE)
-    # =============================
-
-    # --- RSI (14)
-    delta = df.groupby("ticker")["close"].diff()
-    gain = delta.clip(lower=0)
-    loss = -delta.clip(upper=0)
-
-    avg_gain = (
-        gain.groupby(df["ticker"])
-        .rolling(14).mean()
-        .reset_index(level=0, drop=True)
-    )
-
-    avg_loss = (
-        loss.groupby(df["ticker"])
-        .rolling(14).mean()
-        .reset_index(level=0, drop=True)
-    )
-
-    rs = avg_gain / (avg_loss + 1e-8)
-    df["rsi"] = 100 - (100 / (1 + rs))
-
-    # --- Bollinger Position (20)
-    bb_mid = (
-        df.groupby("ticker")["close"]
-        .rolling(20).mean()
-        .reset_index(level=0, drop=True)
-    )
-
-    bb_std = (
-        df.groupby("ticker")["close"]
-        .rolling(20).std()
-        .reset_index(level=0, drop=True)
-    )
-
-    bb_upper = bb_mid + 2 * bb_std
-    bb_lower = bb_mid - 2 * bb_std
-
-    df["bb_position"] = (df["close"] - bb_lower) / (bb_upper - bb_lower + 1e-8)
-
-    # --- Distance to SMA 50 (faster MR signal)
-    sma_50 = (
-        df.groupby("ticker")["close"]
-        .rolling(50).mean()
-        .reset_index(level=0, drop=True)
-    )
-
-    df["dist_sma_50"] = (df["close"] - sma_50) / (sma_50 + 1e-8)
-
-    # =============================
-    # CLEAN
-    # =============================
-    df = df.dropna().reset_index(drop=True)
+    # --- 4. Cross-Sectional Normalization (Z-Score) ---
+    if normalize:
+        cols_to_scale = [
+            "ret_21", "mom_126", "ma_ratio_21_63",
+            "drawdown_63", "dist_sma_200", "sma50_slope20", "mkt_ret_63"
+        ]
+        for col in cols_to_scale:
+            # Group by date to compare stocks against each other on the same day
+            df[col] = df.groupby("datetime")[col].transform(
+                lambda x: (x - x.mean()) / (x.std() + 1e-8)
+            )
 
     return df

@@ -1,156 +1,277 @@
-import os
-import sys
-import joblib
+import streamlit as st
 import pandas as pd
 import numpy as np
-import streamlit as st
+import plotly.graph_objects as go
+import joblib
+import sys
+import os
+import glob
 from pathlib import Path
-from datetime import datetime
 
-# =========================
-# CONFIG
-# =========================
-BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
-sys.path.append(BASE_DIR)
+# =========================================================
+# 1. ROOT PATH FINDER
+# =========================================================
+def find_project_root():
+    current = Path(__file__).resolve()
+    for _ in range(6):
+        if (current / "src").exists() and (current / "models").exists():
+            return current
+        current = current.parent
+    return None
 
-from src.features import add_features
-from src.config import UNIVERSE
-
-MODEL_PATH = os.path.join(BASE_DIR, "models", "long_model_reg.pkl")
-
-FEATURE_COLS = [
-    # Returns
-    "ret_1", "ret_5", "ret_21",
-    "mom_63", "mom_126",
-
-    # Volatility
-    "vol_21", "vol_63",
-
-    # Trend / structure
-    "ma_ratio_21_63",
-    "drawdown_63",
-
-    # New features
-    "rsi",
-    "macd_signal",
-    "bb_position",
-    "volume_ratio",
-    "dist_sma_200",
-    "dist_sma_50"
-]
-
-st.set_page_config(layout="wide", page_title="AI Long Regression Dashboard")
-
-# =========================
-# LOAD MODEL
-# =========================
-@st.cache_resource
-def load_model():
-    return joblib.load(MODEL_PATH)
-
-model = load_model()
-
-# =========================
-# LOAD DATA
-# =========================
-@st.cache_data
-def load_data(ticker):
-    path = os.path.join(BASE_DIR, f"data/raw/D1/{ticker}.US_D1.csv")
-    df = pd.read_csv(path)
-    df["datetime"] = pd.to_datetime(df["datetime"])
-    df = df.sort_values("datetime")
-    df["ticker"] = ticker
-    df_feat = add_features(df)
-    return df, df_feat
-
-# =========================
-# SIDEBAR
-# =========================
-st.sidebar.title("📊 Controls")
-ticker = st.sidebar.selectbox("Select Stock", sorted(UNIVERSE))
-
-df, df_feat = load_data(ticker)
-
-if len(df_feat) < 200:
-    st.warning("Not enough data.")
+ROOT_DIR = find_project_root()
+if ROOT_DIR is None:
+    st.error("Project root not found.")
     st.stop()
 
-# =========================
-# PREDICTION (REGRESSION)
-# =========================
-X_latest = df_feat[FEATURE_COLS].tail(1)
+if str(ROOT_DIR) not in sys.path:
+    sys.path.append(str(ROOT_DIR))
 
-predicted_return = float(model.predict(X_latest)[0])
+# =========================================================
+# IMPORTS
+# =========================================================
+try:
+    from src.config import UNIVERSE
+    from src.features import add_features
+except ImportError as e:
+    st.error(f"Import error: {e}")
+    st.stop()
 
-signal = "BUY" if predicted_return > 0 else "SELL"
+MODEL_PATH = ROOT_DIR / "models/trend_classifier_model.pkl"
+DATA_PATH = ROOT_DIR / "data/raw/D1"
 
-confidence = min(abs(predicted_return) * 8, 1)
-
-# =========================
-# HEADER
-# =========================
-latest_price = df.iloc[-1]["close"]
-
-st.title(f"{ticker} — Long Model (Regression)")
-
-st.markdown("### 📈 Expected Return (6M Horizon)")
-st.metric(
-    label="Model Prediction",
-    value=f"{predicted_return*100:.2f}%",
+# =========================================================
+# PAGE CONFIG
+# =========================================================
+st.set_page_config(
+    page_title="Trend Hunter AI",
+    layout="wide",
+    page_icon="⚡"
 )
 
-st.markdown("### 📊 Signal")
-st.metric(
-    label="Direction",
-    value=signal,
-)
+# =========================================================
+# DARK THEME CSS
+# =========================================================
+st.markdown("""
+<style>
+.stApp { background-color: #050505; }
+section[data-testid="stSidebar"] { background-color: #0a0a0a; border-right: 1px solid #222; }
+.big-price { font-size: 56px; font-weight: 700; color: white; }
+.price-green { color: #00ff41; font-size: 20px; margin-left: 12px; }
+.price-red { color: #ff3333; font-size: 20px; margin-left: 12px; }
+.metric-card {
+    background-color: #111;
+    padding: 18px;
+    border-radius: 10px;
+    border: 1px solid #222;
+}
+.card-title { font-size: 12px; color: #666; margin-bottom: 6px; }
+.card-value { font-size: 28px; font-weight: 700; }
+.card-sub { font-size: 14px; color: #aaa; }
+</style>
+""", unsafe_allow_html=True)
 
-st.markdown("### 🔥 Confidence")
-st.progress(confidence)
+# =========================================================
+# DATA + PREDICTION
+# =========================================================
+@st.cache_data(ttl=3600)
+def load_data_and_predict():
 
-# =========================
-# RISK METRICS
-# =========================
-returns = df_feat["ret_1"]
+    if not MODEL_PATH.exists():
+        return None, None, "Model not found"
 
-vol = returns.std() * np.sqrt(252)
-sharpe = returns.mean() / returns.std() * np.sqrt(252)
+    payload = joblib.load(MODEL_PATH)
+    model = payload["model"]
+    feature_cols = payload["feature_cols"]
 
-st.markdown("---")
-st.subheader("Risk Metrics")
+    files = glob.glob(str(DATA_PATH / "*.US_D1.csv"))
+    available = {os.path.basename(f).split(".")[0] for f in files}
+    tickers = [t for t in UNIVERSE if t in available]
 
-col1, col2 = st.columns(2)
+    dfs = []
+    for t in tickers:
+        try:
+            df = pd.read_csv(DATA_PATH / f"{t}.US_D1.csv")
+            df["ticker"] = t
+            dfs.append(df.tail(400))
+        except:
+            continue
 
-col1.metric("Annual Volatility", f"{vol*100:.2f}%")
-col2.metric("Sharpe Ratio", f"{sharpe:.2f}")
+    if not dfs:
+        return None, None, "No data"
 
-# =========================
-# FEATURE DISPLAY
-# =========================
-with st.expander("Model Features (Latest Values)"):
-    feat_df = df_feat[FEATURE_COLS].tail(1).T
-    feat_df.columns = ["Value"]
-    st.dataframe(feat_df)
+    df = pd.concat(dfs)
+    df["datetime"] = pd.to_datetime(df["datetime"])
+    df = df.sort_values(["ticker", "datetime"])
 
-# =========================
-# EXPORT
-# =========================
-st.markdown("---")
+    df = add_features(df, normalize=True)
 
-export_df = pd.DataFrame([{
-    "Ticker": ticker,
-    "Date": df.iloc[-1]["datetime"],
-    "Price": latest_price,
-    "Expected_Return": predicted_return,
-    "Signal": signal,
-    "Confidence": confidence
-}])
+    last_date = df["datetime"].max()
+    latest = df[df["datetime"] == last_date].copy()
 
-csv = export_df.to_csv(index=False)
+    if latest.empty:
+        return None, None, "Empty latest data"
 
-st.download_button(
-    label="Download Prediction CSV",
-    data=csv,
-    file_name=f"{ticker}_prediction.csv",
-    mime="text/csv"
-)
+    probs = model.predict_proba(latest[feature_cols])[:, 1]
+
+    # Normalize AI score 0-100
+    min_p, max_p = probs.min(), probs.max()
+    latest["ai_score"] = ((probs - min_p) / (max_p - min_p + 1e-9)) * 100
+
+    return latest.sort_values("ai_score", ascending=False), df, None
+
+
+results, history_df, error = load_data_and_predict()
+
+# =========================================================
+# SIDEBAR
+# =========================================================
+with st.sidebar:
+    st.markdown("### ⚡ TREND HUNTER AI")
+    if error:
+        st.error(error)
+        sel_ticker = None
+    else:
+        sel_ticker = st.selectbox("Select Ticker", results["ticker"])
+        st.success("System Active")
+        st.caption("Daily Data • 1M Horizon")
+
+# =========================================================
+# MAIN VIEW
+# =========================================================
+if sel_ticker and history_df is not None:
+
+    row = results[results["ticker"] == sel_ticker].iloc[0]
+    price = row["close"]
+
+    st.markdown(f"""
+    <div style="display:flex;align-items:baseline;">
+        <div class="big-price">${price:,.2f}</div>
+    </div>
+    <div style="color:#666;font-size:12px;margin-bottom:30px;">
+        {sel_ticker}.US • Last Close
+    </div>
+    """, unsafe_allow_html=True)
+
+    # =====================================================
+    # METRIC CARDS
+    # =====================================================
+    c1, c2, c3, c4 = st.columns(4)
+
+    ai_score = row["ai_score"]
+    mom = row["mom_126"]
+    slope = row["sma50_slope20"]
+    dist = row["dist_sma_200"]
+
+    with c1:
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="card-title">AI SIGNAL</div>
+            <div class="card-value">{'BUY' if ai_score>60 else 'WAIT'}</div>
+            <div class="card-sub">Score: {ai_score:.0f}/100</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with c2:
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="card-title">MOMENTUM 6M</div>
+            <div class="card-value">{mom:.2f}</div>
+            <div class="card-sub">126-day return</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with c3:
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="card-title">TREND SLOPE</div>
+            <div class="card-value">{slope:.3f}</div>
+            <div class="card-sub">SMA50 slope</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with c4:
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="card-title">SMA200 DIST</div>
+            <div class="card-value">{dist:.2f}</div>
+            <div class="card-sub">Distance to SMA200</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # =====================================================
+    # ADVANCED CANDLESTICK
+    # =====================================================
+    st.markdown("### 3-Month Price Action")
+
+    hist = history_df[history_df["ticker"] == sel_ticker].tail(120).copy()
+
+    hist["ema20"] = hist["close"].ewm(span=20).mean()
+    hist["ema50"] = hist["close"].ewm(span=50).mean()
+    hist["sma200"] = hist["close"].rolling(200).mean()
+
+    fig = go.Figure()
+
+    fig.add_trace(go.Candlestick(
+        x=hist["datetime"],
+        open=hist["open"],
+        high=hist["high"],
+        low=hist["low"],
+        close=hist["close"],
+        increasing_line_color="#00ff41",
+        decreasing_line_color="#ff3333",
+        name="Price"
+    ))
+
+    fig.add_trace(go.Scatter(
+        x=hist["datetime"],
+        y=hist["ema20"],
+        line=dict(width=1),
+        name="EMA20"
+    ))
+
+    fig.add_trace(go.Scatter(
+        x=hist["datetime"],
+        y=hist["ema50"],
+        line=dict(width=1),
+        name="EMA50"
+    ))
+
+    fig.add_trace(go.Scatter(
+        x=hist["datetime"],
+        y=hist["sma200"],
+        line=dict(width=2),
+        name="SMA200"
+    ))
+
+    fig.add_trace(go.Bar(
+        x=hist["datetime"],
+        y=hist["volume"],
+        yaxis="y2",
+        opacity=0.25,
+        name="Volume"
+    ))
+
+    fig.update_layout(
+        plot_bgcolor="#0a0a0a",
+        paper_bgcolor="#0a0a0a",
+        font=dict(color="#aaa"),
+        height=600,
+        xaxis_rangeslider_visible=False,
+        hovermode="x unified",
+        yaxis=dict(
+            showgrid=True,
+            gridcolor="#1f1f1f",
+            side="right"
+        ),
+        yaxis2=dict(
+            overlaying="y",
+            side="left",
+            showgrid=False
+        )
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+
+else:
+    st.info("Waiting for data...")
