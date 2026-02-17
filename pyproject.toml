@@ -1,7 +1,7 @@
-[project]
+[tool.poetry]
 name = "finanalytics"
 version = "0.1.0"
-description = ""
+description = "NASDAQ Short-Term Stock Classifier"
 authors = [
   { name = "gunay-ozsoy", email = "gunayozsoy@outlook.com" }
 ]
@@ -20,9 +20,23 @@ dependencies = [
   "python-dotenv (>=1.2.1,<2.0.0)",
 ]
 
-[tool.poetry]
-package-mode = false
+[tool.poetry.dependencies]
+python        = "^3.13"
+pandas        = "^2.2"
+numpy         = "^1.26"
+scikit-learn  = "^1.4"
+lightgbm      = "^4.3"
+xgboost       = "^2.0"
+ta            = "^0.11"
+streamlit     = "^1.33"
+plotly        = "^5.20"
+joblib        = "^1.4"
+tqdm          = "^4.66"
+
+[tool.poetry.group.dev.dependencies]
+ipykernel = "^6.29"
+jupyter   = "^1.0"
 
 [build-system]
-requires = ["poetry-core>=2.0.0,<3.0.0"]
+requires      = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
