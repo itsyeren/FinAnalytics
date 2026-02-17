@@ -234,3 +234,9 @@ reports/figures/
 # Logs
 *.log
 EOF
+
+# secrets
+.env
+
+# local caches
+.cache/
