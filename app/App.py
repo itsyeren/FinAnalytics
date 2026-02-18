@@ -15,6 +15,7 @@ from src.integrations.gemini import generate_text
 from src.integrations.marketaux import get_ticker_and_industry_news
 from src.rag.turkish_finance_sft_rag import retrieve_examples
 from src.reports.news_prompt import build_llm_context
+from pages.long_v2 import render_long_dashboard
 
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.append(BASE_DIR)
@@ -326,7 +327,7 @@ with left:
 with right:
     render_logo_or_placeholder(selected_ticker)
 
-tabs = st.tabs(["Hakkında", "Model Çıktıları", "Haber Bülteni", "RAG (SFT + Gemini)", "Raporlar"])
+tabs = st.tabs(["Hakkında", "Model Çıktıları", "Haber Bülteni", "RAG (SFT + Gemini)", "Raporlar", "Long Model Detayları"])
 
 with tabs[0]:
     st.header("Hakkında")
@@ -571,6 +572,9 @@ with tabs[4]:
     st.markdown("---")
 
     left, right = st.columns(2, vertical_alignment="top")
+
+with tabs[5]:
+    render_long_dashboard(selected_ticker)
 
     # Finansal rapor (şablon)
     with left:
