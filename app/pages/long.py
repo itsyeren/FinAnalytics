@@ -513,25 +513,50 @@ def load_data_and_predict():
     model = payload["model"]
     feature_cols = payload["feature_cols"]
 
-    files = glob.glob(str(DATA_PATH / "*.US_D1.csv"))
-    available = {os.path.basename(f).split(".")[0] for f in files}
-    tickers = [t for t in UNIVERSE if t in available]
+    ALL_STOCKS_PATH = ROOT_DIR / "data/all_stocks.csv"
+    if not ALL_STOCKS_PATH.exists():
+        return None, None, f"Data file not found: {ALL_STOCKS_PATH}"
 
-    dfs = []
-    for t in tickers:
-        try:
-            df = pd.read_csv(DATA_PATH / f"{t}.US_D1.csv")
-            df["ticker"] = t
-            dfs.append(df.tail(400))
-        except:
-            continue
-
-    if not dfs:
-        return None, None, "No data"
-
-    df = pd.concat(dfs)
-    df["datetime"] = pd.to_datetime(df["datetime"])
-    df = df.sort_values(["ticker", "datetime"])
+    try:
+        # Load cache
+        df_all = pd.read_csv(ALL_STOCKS_PATH)
+        # Ensure column names match expectations
+        # CSV Cache columns: Ticker, Date, Open, High, Low, Close, Volume, (Adj Close)
+        # We need: ticker, datetime, open, high, low, close, volume
+        
+        # Renaissance of column names
+        cols_map = {
+            "Ticker": "ticker", "Date": "datetime", 
+            "Open": "open", "High": "high", "Low": "low", "Close": "close", "Volume": "volume"
+        }
+        df_all = df_all.rename(columns=cols_map)
+        
+        # Ensure datetime
+        df_all["datetime"] = pd.to_datetime(df_all["datetime"])
+        
+        # Filter for universe
+        # Clean tickers (remove .US if present in universe list matching)
+        # Actually our UNIVERSE list likely has pure tickers or with .US
+        # Let's standardize to what's in the CSV
+        
+        dfs = []
+        for t in UNIVERSE:
+            # Try finding t or t.US
+            mask = df_all["ticker"].isin([t, f"{t}.US"])
+            if mask.any():
+                temp = df_all[mask].copy()
+                # Normalize ticker name to just t for consistency
+                temp["ticker"] = t 
+                dfs.append(temp.tail(400)) # Keep last 400 for feature calc
+            
+        if not dfs:
+            return None, None, "No matching data in all_stocks.csv"
+            
+        df = pd.concat(dfs)
+        df = df.sort_values(["ticker", "datetime"])
+        
+    except Exception as e:
+        return None, None, f"Error loading data: {e}"
 
     df = add_features(df, normalize=True)
 
