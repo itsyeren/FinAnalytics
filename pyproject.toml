@@ -1,42 +1,33 @@
-[tool.poetry]
+[project]
 name = "finanalytics"
 version = "0.1.0"
 description = "NASDAQ Short-Term Stock Classifier"
-authors = [
-  { name = "gunay-ozsoy", email = "gunayozsoy@outlook.com" }
-]
 readme = "README.md"
 requires-python = ">=3.12"
+authors = [{ name = "gunay-ozsoy", email = "gunayozsoy@outlook.com" }]
 dependencies = [
-  "pandas>=2.0,<3",
-  "numpy>=2.4.2,<3.0.0",
-  "scikit-learn>=1.8.0,<2.0.0",
-  "streamlit>=1.54.0,<2.0.0",
-  "plotly>=6.5.2,<7.0.0",
-  "joblib>=1.5.3,<2.0.0",
-  "lightgbm (>=4.6.0,<5.0.0)",
-  "datasets (>=4.5.0,<5.0.0)",
-  "google-genai (>=1.63.0,<2.0.0)",
-  "python-dotenv (>=1.2.1,<2.0.0)",
+  "pandas>=2.2,<3",
+  "numpy>=1.26,<3",
+  "scikit-learn>=1.4,<2",
+  "streamlit>=1.33,<2",
+  "plotly>=5.20,<7",
+  "joblib>=1.4,<2",
+  "tqdm>=4.66,<5",
+  "lightgbm>=4.3,<5",
+  "xgboost>=2.0,<3",
+  "ta>=0.11,<1",
+  "datasets>=4.5,<5",
+  "google-genai>=1.63,<2",
+  "python-dotenv>=1.2,<2",
 ]
-
-[tool.poetry.dependencies]
-python        = "^3.13"
-pandas        = "^2.2"
-numpy         = "^1.26"
-scikit-learn  = "^1.4"
-lightgbm      = "^4.3"
-xgboost       = "^2.0"
-ta            = "^0.11"
-streamlit     = "^1.33"
-plotly        = "^5.20"
-joblib        = "^1.4"
-tqdm          = "^4.66"
 
 [tool.poetry.group.dev.dependencies]
 ipykernel = "^6.29"
-jupyter   = "^1.0"
+jupyter = "^1.0"
+
+[tool.poetry]
+package-mode = false
 
 [build-system]
-requires      = ["poetry-core"]
+requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
