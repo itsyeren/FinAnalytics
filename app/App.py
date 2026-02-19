@@ -11,14 +11,17 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if BASE_DIR not in sys.path:
+    sys.path.insert(0, BASE_DIR)
+
 from src.integrations.gemini import generate_text
 from src.integrations.marketaux import get_ticker_and_industry_news
 from src.rag.turkish_finance_sft_rag import retrieve_examples
 from src.reports.news_prompt import build_llm_context
 from pages.short import render_short_dashboard
-
-BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-sys.path.append(BASE_DIR)
+from pages.mid import render_mid_dashboard
+from pages.long import render_long_dashboard
 
 TICKERS = {
     "Apple": "AAPL",
@@ -327,7 +330,7 @@ with left:
 with right:
     render_logo_or_placeholder(selected_ticker)
 
-tabs = st.tabs(["Hakkında", "Model Çıktıları", "Kısa Vadeli Model", "Haber Bülteni", "RAG (SFT + Gemini)", "Raporlar"])
+tabs = st.tabs(["Hakkında", "Model Çıktıları", "Kısa Vadeli Model", "Orta Vadeli Model", "Uzun Vadeli Model", "Haber Bülteni", "RAG (SFT + Gemini)", "Raporlar"])
 
 with tabs[0]:
     st.header("Hakkında")
@@ -335,6 +338,12 @@ with tabs[0]:
 
 with tabs[2]:
     render_short_dashboard(selected_ticker)
+
+with tabs[3]:
+    render_mid_dashboard(selected_ticker)
+
+with tabs[4]:
+    render_long_dashboard(selected_ticker)
 
 with tabs[1]:
     st.header("Model Çıktıları (Sahte)")
@@ -355,7 +364,7 @@ with tabs[1]:
     st.write("Senaryo Çıktıları")
     st.dataframe(scenario, use_container_width=True)
 
-with tabs[3]:
+with tabs[5]:
     st.header("Haber Bülteni")
 
     use_marketaux = st.toggle("Marketaux ile gerçek haberleri çek", value=True, key="use_marketaux")
@@ -401,7 +410,7 @@ with tabs[3]:
     else:
         st.info("Gerçek haberleri görmek için toggle'ı aç.")
 
-with tabs[4]:
+with tabs[6]:
     st.header("RAG (SFT + Gemini)")
     st.caption(
         "SFT dataset’ten benzer soru/cevap örnekleri çekilir (retrieval), ardından Gemini ile yanıt üretilir. "
@@ -558,7 +567,7 @@ with tabs[4]:
                     st.error(str(e))
                     st.info("Kontrol: .env içinde GEMINI_API_KEY var mı? (set -a && source .env && set +a)")
 
-with tabs[5]:
+with tabs[7]:
     st.header("Raporlar")
 
     st.caption("Mail tanımladıysan iki farklı rapor oluşturup mailine gönderebilirsin (şu an sadece şablon/önizleme).")

@@ -8,6 +8,9 @@ DATA_DIR    = Path.home() / "Downloads" / "archive" / "D1"
 MODELS_DIR  = Path("models")
 MODELS_DIR.mkdir(exist_ok=True)
 
+# ── Minimum satır sayısı (yeterli veri kontrolü)
+MIN_ROWS = 200
+
 # ── Reproducibility
 RANDOM_SEED = 42
 
@@ -50,7 +53,7 @@ TICKERS = {
     "Molson Coors":                    "TAP",
     "Lamb Weston":                     "LW",
     "Church & Dwight":                 "CHD",
-    "Brown-Forman":                    "BF",
+    "Brown-Forman":                    "BF.B",
 }
 
 # isim → ticker hızlı erişim
