@@ -1,37 +1,8 @@
 UNIVERSE = [
-    # ETFs (sector proxies)
-    "XLK","XLC","XLY","XLP","XLF","XLV","XLE","XLI","XLB","XLRE","XLU",
-
-    # Tech
-    "AAPL","MSFT","NVDA",
-
-    # Comm Services
-    "GOOGL","META","NFLX",
-
-    # Consumer Discretionary
-    "AMZN","TSLA","MCD",
-
-    # Consumer Staples
-    "PG","KO","PEP",
-
-    # Financials
-    "JPM","BAC","V",
-
-    # Healthcare
-    "JNJ","PFE","UNH",
-
-    # Energy
-    "XOM","CVX","COP",
-
-    # Industrials
-    "BA","CAT","GE",
-
-    # Materials
-    "LIN","SHW","FCX",
-
-    # Real Estate
-    "AMT","PLD","EQIX",
-
-    # Utilities
-    "NEE","DUK","SO",
+    "AAPL", "MSFT", "NVDA",
+    "CAG", "HSY", "CCEP", "KR", "SYY", "CPB", "KDP",
+    "PEP", "TSN", "SJM", "KHC", "PM", "MO", "HRL",
+    "EL", "CL", "K", "GIS", "KMB", "CLX", "MKC",
+    "KO", "WMT", "COST", "DG", "DLTR", "WBA",
+    "MNST", "STZ", "MDLZ", "TAP", "LW", "CHD", "BF.B",
 ]
