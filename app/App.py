@@ -15,6 +15,7 @@ from src.integrations.gemini import generate_text
 from src.integrations.marketaux import get_ticker_and_industry_news
 from src.rag.turkish_finance_sft_rag import retrieve_examples
 from src.reports.news_prompt import build_llm_context
+from pages.short import render_short_dashboard
 
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.append(BASE_DIR)
@@ -326,11 +327,14 @@ with left:
 with right:
     render_logo_or_placeholder(selected_ticker)
 
-tabs = st.tabs(["Hakkında", "Model Çıktıları", "Haber Bülteni", "RAG (SFT + Gemini)", "Raporlar"])
+tabs = st.tabs(["Hakkında", "Model Çıktıları", "Kısa Vadeli Model", "Haber Bülteni", "RAG (SFT + Gemini)", "Raporlar"])
 
 with tabs[0]:
     st.header("Hakkında")
     st.write(dummy_ticker_about(selected_ticker))
+
+with tabs[2]:
+    render_short_dashboard(selected_ticker)
 
 with tabs[1]:
     st.header("Model Çıktıları (Sahte)")
@@ -351,7 +355,7 @@ with tabs[1]:
     st.write("Senaryo Çıktıları")
     st.dataframe(scenario, use_container_width=True)
 
-with tabs[2]:
+with tabs[3]:
     st.header("Haber Bülteni")
 
     use_marketaux = st.toggle("Marketaux ile gerçek haberleri çek", value=True, key="use_marketaux")
@@ -397,7 +401,7 @@ with tabs[2]:
     else:
         st.info("Gerçek haberleri görmek için toggle'ı aç.")
 
-with tabs[3]:
+with tabs[4]:
     st.header("RAG (SFT + Gemini)")
     st.caption(
         "SFT dataset’ten benzer soru/cevap örnekleri çekilir (retrieval), ardından Gemini ile yanıt üretilir. "
@@ -554,7 +558,7 @@ with tabs[3]:
                     st.error(str(e))
                     st.info("Kontrol: .env içinde GEMINI_API_KEY var mı? (set -a && source .env && set +a)")
 
-with tabs[4]:
+with tabs[5]:
     st.header("Raporlar")
 
     st.caption("Mail tanımladıysan iki farklı rapor oluşturup mailine gönderebilirsin (şu an sadece şablon/önizleme).")
