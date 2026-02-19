@@ -6,6 +6,10 @@ import sys
 
 from pathlib import Path
 
+# Setup path before imports
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, BASE_DIR)
+
 import numpy as np
 import pandas as pd
 import plotly.express as px
@@ -16,9 +20,6 @@ from src.integrations.marketaux import get_ticker_and_industry_news
 from src.rag.turkish_finance_sft_rag import retrieve_examples
 from src.reports.news_prompt import build_llm_context
 from pages.short import render_short_dashboard
-
-BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-sys.path.append(BASE_DIR)
 
 TICKERS = {
     "Apple": "AAPL",
