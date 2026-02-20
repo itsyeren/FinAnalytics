@@ -36,3 +36,7 @@ data/news_cache/
 # ── OS ───────────────────────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
+
+# Runtime cache (API önbellekleri)
+.cache/
+
