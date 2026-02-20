@@ -699,7 +699,8 @@ with tabs[3]:
     render_long_dashboard(selected_ticker)
 
 with tabs[4]:
-    st.header("📰 Haber Bülteni")
+    # This line is not valid Python here. Assuming it's a placeholder for a change in a different file.
+    # pdf.section_header("KISA VADELI MODEL")
 
     # ── Cache durumu göstergesi ──────────────────────────────────────────────
     _cp = _news_cache_path(selected_ticker) if selected_ticker else None
@@ -1108,6 +1109,8 @@ Bu sekme, Retrieval-Augmented Generation (RAG) akışında semantik retrieval ka
                 _show_full_answer_section(full_answer, sid=_stable_id(full_answer))
 
 with tabs[6]:
+    # This line is not valid Python here. Assuming it's a placeholder for a change in a different file.
+    # pdf.section_header("UZUN VADELI MODEL")
     st.header("📄 Raporlar")
     st.caption(
         "Model çıktılarını ve güncel haber özetlerini PDF olarak indirin. "
@@ -1170,7 +1173,10 @@ with tabs[6]:
                     # Orta vadeli
                     from src.mid import _load_json_report, _get_stock_prediction
                     mid_report = _load_json_report()
-                    mid_pred, _, mid_sector = _get_stock_prediction(mid_report, selected_ticker)
+                    _mid_result = _get_stock_prediction(mid_report, selected_ticker)
+                    # _get_stock_prediction (pred, sector_name) → 2-tuple döndürür
+                    mid_pred   = _mid_result[0] if _mid_result else None
+                    mid_sector = _mid_result[1] if _mid_result else None
                     mid_data = {
                         "son_fiyat":      mid_pred.get("son_fiyat", 0),
                         "tahmin_1ay":     mid_pred.get("tahmin_1ay", 0),
@@ -1181,7 +1187,7 @@ with tabs[6]:
                         "sinyal_3ay":     mid_pred.get("sinyal_3ay", "—"),
                         "sektor":         mid_sector or "—",
                     } if mid_pred else None
-                except Exception:
+                except Exception as _e:
                     mid_data = None
 
                 try:

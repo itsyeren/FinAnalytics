@@ -212,7 +212,7 @@ def build_financial_pdf(
     pdf = _PDF("Finansal Rapor", ticker, label)
 
     # ── Kısa Vadeli Model ───────────────────────────────────────
-    pdf.section_header("KISA VADELI MODEL  (1/3/5/7 Gun)")
+    pdf.section_header("KISA VADELI MODEL")
 
     if short_data:
         pdf.kv_row("Hisse", _safe(f"{label} ({ticker})"), shade=True)
@@ -248,7 +248,7 @@ def build_financial_pdf(
         pdf.body_text("Kisa vadeli model verisi mevcut degil.")
 
     # ── Orta Vadeli Model ───────────────────────────────────────
-    pdf.section_header("ORTA VADELI MODEL  (1 Ay / 3 Ay)")
+    pdf.section_header("ORTA VADELI MODEL")
 
     if mid_data:
         rows_mid = [
@@ -267,7 +267,7 @@ def build_financial_pdf(
     pdf.ln(3)
 
     # ── Uzun Vadeli Model ───────────────────────────────────────
-    pdf.section_header("UZUN VADELI MODEL  (22-63 Gun Horizon)")
+    pdf.section_header("UZUN VADELI MODEL")
 
     if long_data:
         rows_long = [
