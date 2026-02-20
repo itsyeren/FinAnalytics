@@ -37,9 +37,18 @@ def _save_cache(cache: Dict[str, Any]) -> None:
 
 def _get(path: str, params: Dict[str, Any]) -> Dict[str, Any]:
     params = {"api_token": _token(), **params}
-    r = requests.get(f"{BASE}{path}", params=params, timeout=30)
+    try:
+        r = requests.get(f"{BASE}{path}", params=params, timeout=30)
+    except requests.exceptions.Timeout:
+        raise RuntimeError(f"Marketaux istek zaman aşımı: {path}")
+    except requests.exceptions.RequestException as exc:
+        raise RuntimeError(f"Marketaux bağlantı hatası: {exc}")
+    if r.status_code == 401:
+        raise RuntimeError("Marketaux 401: API token geçersiz veya süresi dolmuş.")
+    if r.status_code == 429:
+        raise RuntimeError("Marketaux 429: API kota aşıldı. Bir süre bekleyin.")
     if r.status_code != 200:
-        raise RuntimeError(f"Marketaux HTTP {r.status_code}: {r.text}")
+        raise RuntimeError(f"Marketaux HTTP {r.status_code}: {r.text[:200]}")
     return r.json()
 
 
@@ -110,6 +119,10 @@ def resolve_entity(
     company_name: Optional[str] = None,
     prefer_country: str = "us",
 ) -> Dict[str, Any]:
+    """Entity'yi önce cache'ten, yoksa Marketaux'tan çözer.
+    Fallback sırası: symbol/country → symbol (global) → name/country → name (global).
+    Her adımda bulunca hemen döner ve cache'e yazar — gereksiz API çağrısı önler.
+    """
     cache = _load_cache()
     entities = cache.get("entities", {})
 
@@ -117,105 +130,57 @@ def resolve_entity(
     if key in entities:
         return entities[key]
 
-    for q in _variants(key):
-        cands = _entity_search(symbols=q, countries=prefer_country)
-        best = _pick_best(cands, prefer_country=prefer_country)
-        if best:
-            ent = {
-                "symbol": best.get("symbol"),
-                "name": best.get("name"),
-                "industry": best.get("industry"),
-                "country": best.get("country"),
-                "type": best.get("type"),
-            }
-            entities[key] = ent
-            cache["entities"] = entities
-            _save_cache(cache)
-            return ent
+    variants = _variants(key)
 
-    for q in _variants(key):
-        cands = _entity_search(search=q, countries=prefer_country)
-        best = _pick_best(cands, prefer_country=prefer_country)
-        if best:
-            ent = {
-                "symbol": best.get("symbol"),
-                "name": best.get("name"),
-                "industry": best.get("industry"),
-                "country": best.get("country"),
-                "type": best.get("type"),
-            }
-            entities[key] = ent
-            cache["entities"] = entities
-            _save_cache(cache)
-            return ent
+    def _try_search(search_type: str, q: str, country: Optional[str]) -> Optional[Dict[str, Any]]:
+        """Tek bir entity arama dener, bulursa döndürür."""
+        try:
+            params: Dict[str, Any] = {}
+            if search_type == "symbol":
+                params["symbols"] = q
+            else:
+                params["search"] = q
+            if country:
+                params["countries"] = country
+            cands = _entity_search(**params)
+            return _pick_best(cands, prefer_country=prefer_country)
+        except Exception:
+            return None
 
-    for q in _variants(key):
-        cands = _entity_search(symbols=q)
-        best = _pick_best(cands, prefer_country=prefer_country)
-        if best:
-            ent = {
-                "symbol": best.get("symbol"),
-                "name": best.get("name"),
-                "industry": best.get("industry"),
-                "country": best.get("country"),
-                "type": best.get("type"),
-            }
-            entities[key] = ent
-            cache["entities"] = entities
-            _save_cache(cache)
-            return ent
+    def _save_and_return(best: Dict[str, Any]) -> Dict[str, Any]:
+        ent = {
+            "symbol": best.get("symbol"),
+            "name": best.get("name"),
+            "industry": best.get("industry"),
+            "country": best.get("country"),
+            "type": best.get("type"),
+        }
+        entities[key] = ent
+        cache["entities"] = entities
+        _save_cache(cache)
+        return ent
 
-    for q in _variants(key):
-        cands = _entity_search(search=q)
-        best = _pick_best(cands, prefer_country=prefer_country)
-        if best:
-            ent = {
-                "symbol": best.get("symbol"),
-                "name": best.get("name"),
-                "industry": best.get("industry"),
-                "country": best.get("country"),
-                "type": best.get("type"),
-            }
-            entities[key] = ent
-            cache["entities"] = entities
-            _save_cache(cache)
-            return ent
+    # Fallback zinciri: dört adım, ilk başarıda erken dönür
+    fallbacks = [
+        # (search_type, country_filter)
+        ("symbol", prefer_country),
+        ("symbol", None),
+        ("name",   prefer_country),
+        ("name",   None),
+    ]
 
-    if company_name:
-        name_qs = _dedupe_keep_order([company_name.strip(), company_name.strip().replace("-", " ")])
-        for q in name_qs:
-            cands = _entity_search(search=q, countries=prefer_country)
-            best = _pick_best(cands, prefer_country=prefer_country)
+    for search_type, country in fallbacks:
+        queries = variants if search_type == "symbol" else (
+            _dedupe_keep_order([company_name.strip(), company_name.strip().replace("-", " ")])
+            if company_name else variants
+        )
+        for q in queries:
+            best = _try_search(search_type, q, country)
             if best:
-                ent = {
-                    "symbol": best.get("symbol"),
-                    "name": best.get("name"),
-                    "industry": best.get("industry"),
-                    "country": best.get("country"),
-                    "type": best.get("type"),
-                }
-                entities[key] = ent
-                cache["entities"] = entities
-                _save_cache(cache)
-                return ent
-
-        for q in name_qs:
-            cands = _entity_search(search=q)
-            best = _pick_best(cands, prefer_country=prefer_country)
-            if best:
-                ent = {
-                    "symbol": best.get("symbol"),
-                    "name": best.get("name"),
-                    "industry": best.get("industry"),
-                    "country": best.get("country"),
-                    "type": best.get("type"),
-                }
-                entities[key] = ent
-                cache["entities"] = entities
-                _save_cache(cache)
-                return ent
+                return _save_and_return(best)
 
     raise ValueError(f"Entity bulunamadı: {ticker_like} (company_name={company_name})")
+
 
 
 def _news_page(params: Dict[str, Any]) -> Dict[str, Any]:
@@ -230,12 +195,13 @@ def _news_page(params: Dict[str, Any]) -> Dict[str, Any]:
     return _get("/news/all", base)
 
 
-def get_last_n_news(params_key: str, params_val: str, n: int = 10, per_req: int = 3) -> List[Dict[str, Any]]:
+def get_last_n_news(params_key: str, params_val: str, n: int = 10, per_req: int = 10, max_pages: int = 3) -> List[Dict[str, Any]]:
+    """Son n haberi çeker. max_pages ile kota aşımı önlenir."""
     collected: List[Dict[str, Any]] = []
     seen = set()
     page = 1
 
-    while len(collected) < n:
+    while len(collected) < n and page <= max_pages:
         resp = _news_page({params_key: params_val, "limit": per_req, "page": page})
         items = resp.get("data", [])
         if not items:
@@ -251,10 +217,8 @@ def get_last_n_news(params_key: str, params_val: str, n: int = 10, per_req: int 
             if len(collected) >= n:
                 break
 
-        meta = resp.get("meta", {})
-        returned = meta.get("returned")
-        limit = meta.get("limit")
-        if returned is not None and limit is not None and returned < limit:
+        # Sayfa dönen eleman sayısı istenen limit'ten azsa daha fazla sayfa yok
+        if len(items) < per_req:
             break
 
         page += 1
