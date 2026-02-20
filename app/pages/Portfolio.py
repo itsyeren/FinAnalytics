@@ -94,157 +94,134 @@ if not SECTOR_JSON.exists():
 # PAGE CONFIG
 # =========================================================
 st.set_page_config(
-    page_title="Portföy Yönetimi — FinAnalytics",
+    page_title="Portfolio — FinAnalytics",
     layout="wide",
-    page_icon="💼"
+    page_icon="💼",
 )
 
 # =========================================================
-# CSS — Multi Sektör teması (Inter, gradient kartlar)
-# + Short model için dark candlestick tema override
+# CSS — Global UI/UX design system (Analysis.py ile uyumlu)
 # =========================================================
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap');
 
-:root {
-    --bg-primary:    #0a192f;
-    --bg-secondary:  #112240;
-    --bg-card:       #1a1a2e;
-    --bg-card-alt:   #16213e;
-    --border:        rgba(255,255,255,0.08);
-    --accent-teal:   #64ffda;
-    --accent-purple: #667eea;
-    --accent-pink:   #c084fc;
-    --green:         #00b894;
-    --red:           #e17055;
-    --amber:         #FFB000;
-    --text-primary:  #e6f1ff;
-    --text-secondary:#8892b0;
-    --text-dim:      #4A5568;
-    --mono:          'Space Mono', monospace;
-    --sans:          'Inter', sans-serif;
-}
+.stApp { font-family: 'Inter', sans-serif; }
 
-.stApp {
-    font-family: var(--sans);
-}
-
-/* Sidebar */
+/* ── Sidebar ─────────────────────────────────────────── */
 div[data-testid="stSidebar"] {
-    background: linear-gradient(180deg, #0a192f 0%, #112240 100%);
+    background: linear-gradient(180deg, #0a192f 0%, #0d1829 100%);
 }
 
-/* Metric cards */
+/* ── Score cards ────────────────────────────────────── */
 .pf-metric-card {
-    background: linear-gradient(135deg, var(--bg-card) 0%, var(--bg-card-alt) 100%);
-    border-radius: 16px;
-    padding: 1.5rem;
-    border: 1px solid var(--border);
-    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+    background: rgba(255,255,255,0.035);
+    border: 1px solid rgba(128,128,128,0.18);
+    border-radius: 12px;
+    padding: 1.4rem 1.2rem;
     text-align: center;
-    transition: transform 0.2s ease;
+    transition: border-color 0.2s, background 0.2s;
+    min-height: 110px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
 }
-.pf-metric-card:hover { transform: translateY(-2px); }
+.pf-metric-card:hover {
+    border-color: rgba(99,179,237,0.4);
+    background: rgba(99,179,237,0.07);
+}
 .pf-metric-label {
-    font-size: 0.8rem;
-    color: var(--text-secondary);
+    font-size: 11px;
+    color: #8892b0;
     text-transform: uppercase;
     letter-spacing: 1px;
-    margin-bottom: 0.3rem;
+    margin-bottom: 8px;
+    line-height: 1.3;
 }
 .pf-metric-value {
-    font-size: 1.8rem;
+    font-size: 1.6rem;
     font-weight: 700;
-    color: var(--text-primary);
+    color: #e8edf5;
+    line-height: 1.2;
 }
-.pf-metric-delta-up { color: var(--accent-teal); font-size: 1rem; font-weight: 600; }
-.pf-metric-delta-down { color: var(--red); font-size: 1rem; font-weight: 600; }
+.pf-metric-delta-up   { color: #64ffda; font-size: 0.85rem; font-weight: 600; margin-top: 4px; }
+.pf-metric-delta-down { color: #ff6b6b; font-size: 0.85rem; font-weight: 600; margin-top: 4px; }
 
-/* Signal badges */
+/* ── Signal badges ──────────────────────────────────── */
 .pf-signal-al {
     background: linear-gradient(135deg, #00b894, #00cec9);
-    color: #fff; padding: 0.35rem 1rem; border-radius: 20px;
-    font-weight: 700; font-size: 0.85rem; display: inline-block;
+    color: #fff; padding: 4px 14px; border-radius: 20px;
+    font-weight: 700; font-size: 0.82rem; display: inline-block;
 }
 .pf-signal-bekle {
     background: linear-gradient(135deg, #fdcb6e, #f39c12);
-    color: #2d3436; padding: 0.35rem 1rem; border-radius: 20px;
-    font-weight: 700; font-size: 0.85rem; display: inline-block;
+    color: #2d3436; padding: 4px 14px; border-radius: 20px;
+    font-weight: 700; font-size: 0.82rem; display: inline-block;
 }
 .pf-signal-sat {
     background: linear-gradient(135deg, #e17055, #d63031);
-    color: #fff; padding: 0.35rem 1rem; border-radius: 20px;
-    font-weight: 700; font-size: 0.85rem; display: inline-block;
+    color: #fff; padding: 4px 14px; border-radius: 20px;
+    font-weight: 700; font-size: 0.82rem; display: inline-block;
 }
-
-/* Long model signal badges (amber theme) */
 .pf-signal-up {
     background: rgba(46,204,113,0.12); color: #2ECC71 !important;
     border: 1px solid rgba(46,204,113,0.3);
     padding: 3px 10px; border-radius: 4px;
-    font-family: var(--mono); font-size: 11px; font-weight: 700;
+    font-family: 'Space Mono', monospace; font-size: 11px; font-weight: 700;
     letter-spacing: 2px; display: inline-block;
 }
 .pf-signal-down {
     background: rgba(231,76,60,0.12); color: #E74C3C !important;
     border: 1px solid rgba(231,76,60,0.3);
     padding: 3px 10px; border-radius: 4px;
-    font-family: var(--mono); font-size: 11px; font-weight: 700;
+    font-family: 'Space Mono', monospace; font-size: 11px; font-weight: 700;
     letter-spacing: 2px; display: inline-block;
 }
 .pf-signal-neutral {
     background: rgba(139,147,165,0.1); color: #8B93A5 !important;
     border: 1px solid rgba(139,147,165,0.2);
     padding: 3px 10px; border-radius: 4px;
-    font-family: var(--mono); font-size: 11px; font-weight: 700;
+    font-family: 'Space Mono', monospace; font-size: 11px; font-weight: 700;
     letter-spacing: 2px; display: inline-block;
 }
 
-/* Section header */
+/* ── Section header ─────────────────────────────────── */
 .pf-section-header {
-    font-size: 1.2rem; font-weight: 600; color: #ccd6f6;
-    margin: 2rem 0 1rem 0; padding-bottom: 0.5rem;
-    border-bottom: 2px solid rgba(100, 255, 218, 0.2);
+    font-size: 1.05rem; font-weight: 600; color: #ccd6f6;
+    margin: 28px 0 14px 0; padding-bottom: 8px;
+    border-bottom: 1px solid rgba(99,179,237,0.2);
 }
 
-/* Dashboard header */
-.pf-header h1 {
-    font-size: 2rem; font-weight: 700;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    margin-bottom: 0.3rem;
-}
-.pf-header p { color: #8892b0; font-size: 0.95rem; }
-
-/* Hide branding */
-#MainMenu {visibility: hidden;}
-footer {visibility: hidden;}
-
-/* Table */
+/* ── Table ──────────────────────────────────────────── */
 .pf-table {
-    width: 100%; border-collapse: collapse; font-size: 0.9rem;
+    width: 100%; border-collapse: collapse; font-size: 0.88rem;
 }
 .pf-table th {
-    background: rgba(100, 255, 218, 0.1); color: #64ffda;
-    padding: 0.8rem; text-align: left; font-weight: 600;
+    background: rgba(99,179,237,0.1); color: #63b3ed;
+    padding: 10px 12px; text-align: left; font-weight: 600;
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
 }
 .pf-table td {
-    padding: 0.7rem 0.8rem;
-    border-bottom: 1px solid rgba(255,255,255,0.05);
-    color: #ccd6f6;
+    padding: 9px 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    color: #ccd6f6; vertical-align: middle;
 }
+.pf-table tr:hover td { background: rgba(99,179,237,0.04); }
 
-/* Dividend badge */
+/* ── Dividend badges ────────────────────────────────── */
 .pf-div-yes {
     background: rgba(46,204,113,0.15); color: #2ECC71;
-    padding: 2px 8px; border-radius: 10px; font-size: 0.75rem; font-weight: 600;
+    padding: 2px 8px; border-radius: 10px; font-size: 0.72rem; font-weight: 600;
 }
 .pf-div-no {
     background: rgba(139,147,165,0.12); color: #8892b0;
-    padding: 2px 8px; border-radius: 10px; font-size: 0.75rem; font-weight: 600;
+    padding: 2px 8px; border-radius: 10px; font-size: 0.72rem; font-weight: 600;
 }
+
+/* Hide Streamlit chrome */
+#MainMenu { visibility: hidden; }
+footer    { visibility: hidden; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -377,8 +354,26 @@ portfolio = st.session_state["portfolio"]
 # SIDEBAR
 # =========================================================
 with st.sidebar:
-    st.markdown("## 💼 Portföy Oluştur")
-    st.markdown("---")
+    st.markdown(
+        """
+        <div style="
+            padding: 14px 0 18px 0;
+            border-bottom: 1px solid rgba(99,179,237,0.2);
+            margin-bottom: 18px;
+        ">
+            <div style="font-size:1.3rem;font-weight:800;letter-spacing:0.5px;
+                        background:linear-gradient(90deg,#63b3ed,#90cdf4);
+                        -webkit-background-clip:text;-webkit-text-fill-color:transparent;">
+                📈 FinAnalytics
+            </div>
+            <div style="font-size:11px;color:#556;margin-top:3px;letter-spacing:0.5px;">
+                Portföy Yönetimi
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.markdown("#### 💼 Portföy Oluştur")
 
     ticker_options = list(ALL_TICKERS_MAP.values())
     selected = st.selectbox(
@@ -425,19 +420,39 @@ with st.sidebar:
 # =========================================================
 # HEADER
 # =========================================================
-st.markdown("""
-<div class="pf-header" style="text-align:center; padding:1rem 0 2rem 0;">
-    <h1>💼 Portföy Yönetimi & Tahmin</h1>
-    <p>Hisseleriniz için Short · Mid · Long model tahminleri</p>
-</div>
-""", unsafe_allow_html=True)
+st.markdown(
+    """
+    <div style="margin-bottom:24px;">
+        <div style="font-size:1.6rem;font-weight:700;color:#e8edf5;margin-bottom:4px;">
+            💼 Portföy Yönetimi
+            <span style="font-size:1rem;font-weight:400;color:#63b3ed;margin-left:10px;">& Tahmin</span>
+        </div>
+        <div style="font-size:0.9rem;color:#8892b0;">Short · Mid · Long model sinyalleri bir arada</div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 
 # =========================================================
 # BOŞ PORTFÖY
 # =========================================================
 if not portfolio:
-    st.info("Portföyünüz boş. Sol menüden hisse ekleyerek başlayın.")
+    st.markdown(
+        """
+        <div style="
+            display:flex;flex-direction:column;align-items:center;justify-content:center;
+            min-height:50vh;text-align:center;gap:14px;
+        ">
+            <div style="font-size:3rem;">💼</div>
+            <div style="font-size:1.3rem;font-weight:600;color:#e8edf5;">Portföyünüz boş</div>
+            <div style="font-size:0.9rem;color:#8892b0;max-width:360px;line-height:1.7;">
+                Sol panelden hisse seçip adet ve alış fiyatı girerek portföyünüzü oluşturun.
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
     st.stop()
 
 
@@ -621,8 +636,8 @@ with col_chart:
         x=x_dates, y=y_values,
         mode='lines+markers+text',
         fill='tozeroy',
-        line=dict(color='#667eea', width=4),
-        marker=dict(size=10, color='#764ba2', line=dict(width=2, color='white')),
+        line=dict(color='#63b3ed', width=3.5),
+        marker=dict(size=10, color='#90cdf4', line=dict(width=2, color='#0a192f')),
         text=[f"${v:,.0f}" for v in y_values],
         textposition="top center",
         name='Portföy Değeri'
@@ -632,21 +647,11 @@ with col_chart:
         title=f"Tahmini Büyüme Eğrisi (1 Ay - 3 Ay)",
         font=dict(family="Space Mono", color="#ccd6f6"),
         paper_bgcolor='rgba(0,0,0,0)',
-        plot_bgcolor='rgba(255,255,255,0.05)',
+        plot_bgcolor='rgba(10,25,47,0.5)',
         xaxis=dict(
-            showgrid=False, 
-            type="date",
-            rangeselector=dict(
-                buttons=list([
-                    dict(count=7, label="1H", step="day", stepmode="backward"),
-                    dict(count=1, label="1A", step="month", stepmode="backward"),
-                    dict(count=3, label="3A", step="month", stepmode="backward"),
-                    dict(step="all", label="Tümü")
-                ]),
-                bgcolor="#1C2432",
-                activecolor="#667eea",
-                font=dict(color="white")
-            )
+            showgrid=False,
+            gridcolor="rgba(255,255,255,0.05)",
+            zeroline=False,
         ),
         yaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.1)', tickprefix="$"),
         height=350,
@@ -654,7 +659,7 @@ with col_chart:
         showlegend=False,
         hovermode="x unified"
     )
-    st.plotly_chart(fig_proj, use_container_width=True)
+    st.plotly_chart(fig_proj, width='stretch')
 
     # 3-Stage Progress Metrics
     st.markdown('<div style="font-family:\'Space Mono\';font-size:0.85rem;color:#8892b0;margin-bottom:8px;text-transform:uppercase;letter-spacing:1px;">Tahmini Büyüme (3 Aşamalı)</div>', unsafe_allow_html=True)
@@ -711,7 +716,7 @@ with col_pie_3m:
         showlegend=False
     )
     fig_pie_3m.update_traces(textposition='inside', textinfo='percent+label')
-    st.plotly_chart(fig_pie_3m, use_container_width=True)
+    st.plotly_chart(fig_pie_3m, width='stretch')
 
 # Ağırlık Pie Chart + Tablo
 col_pie, col_table = st.columns([1, 2])
@@ -733,7 +738,7 @@ with col_pie:
         margin=dict(l=20, r=20, t=40, b=20),
         font=dict(color="#8892b0"),
     )
-    st.plotly_chart(fig_pie, use_container_width=True)
+    st.plotly_chart(fig_pie, width='stretch')
 
 with col_table:
     # Detay tablosu (HTML)
@@ -870,7 +875,7 @@ for t in tickers_in_portfolio:
                 font=dict(family="Space Mono", color="#8B93A5"),
                 showlegend=False,
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
         # Horizon tahminleri
         horizons = res.get("horizons", {})
