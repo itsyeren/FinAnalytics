@@ -525,245 +525,274 @@ total_pnl = total_value - total_cost
 total_pnl_pct = ((total_value / total_cost) - 1) * 100 if total_cost > 0 else 0
 total_div_income = sum(r["est_annual_div_income"] for r in rows_summary)
 
-# Metric Cards
-c1, c2, c3, c4 = st.columns(4)
-
-with c1:
-    st.markdown(f"""
-    <div class="pf-metric-card">
-        <div class="pf-metric-label">Toplam Değer</div>
-        <div class="pf-metric-value">${total_value:,.2f}</div>
+# ── Portföy Özet Score Card'ları (CSS grid — eşit boyut) ──────────────────
+delta_cls = "pf-metric-delta-up" if total_pnl >= 0 else "pf-metric-delta-down"
+st.markdown(
+    f"""
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px;">
+        <div class="pf-metric-card">
+            <div class="pf-metric-label">Toplam Değer</div>
+            <div class="pf-metric-value">${total_value:,.2f}</div>
+        </div>
+        <div class="pf-metric-card">
+            <div class="pf-metric-label">Toplam Maliyet</div>
+            <div class="pf-metric-value">${total_cost:,.2f}</div>
+        </div>
+        <div class="pf-metric-card">
+            <div class="pf-metric-label">Toplam Kar / Zarar</div>
+            <div class="pf-metric-value">${total_pnl:+,.2f}</div>
+            <div class="{delta_cls}">{total_pnl_pct:+.2f}%</div>
+        </div>
+        <div class="pf-metric-card">
+            <div class="pf-metric-label">Tahmini Yıllık Temettü</div>
+            <div class="pf-metric-value">${total_div_income:,.2f}</div>
+            <div style="color:#4a6080;font-size:0.72rem;margin-top:4px;font-family:'Space Mono',monospace;">forward div / yfinance</div>
+        </div>
     </div>
-    """, unsafe_allow_html=True)
+    """,
+    unsafe_allow_html=True,
+)
 
-with c2:
-    st.markdown(f"""
-    <div class="pf-metric-card">
-        <div class="pf-metric-label">Toplam Maliyet</div>
-        <div class="pf-metric-value">${total_cost:,.2f}</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-with c3:
-    delta_cls = "pf-metric-delta-up" if total_pnl >= 0 else "pf-metric-delta-down"
-    st.markdown(f"""
-    <div class="pf-metric-card">
-        <div class="pf-metric-label">Toplam Kar/Zarar</div>
-        <div class="pf-metric-value">${total_pnl:+,.2f}</div>
-        <div class="{delta_cls}">{total_pnl_pct:+.2f}%</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-with c4:
-    st.markdown(f"""
-    <div class="pf-metric-card">
-        <div class="pf-metric-label">Tahmini Yıllık Temettü</div>
-                <div class="pf-metric-value">${total_div_income:,.2f}</div>
-        <div style="color:#8892b0;font-size:0.75rem;margin-top:4px;">yfinance forward dividend</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-st.markdown("<br>", unsafe_allow_html=True)
 
 # =========================================================
 # PROJECTION CHARTS
 # =========================================================
 st.markdown('<div class="pf-section-header">📈 Portföy Değer Projeksiyonu</div>', unsafe_allow_html=True)
 
-# Calculate Projections
-report = load_sector_json()
+# ── Projeksiyon hesapla ──────────────────────────────────────────────────────
+report    = load_sector_json()
 proj_current = total_value
-proj_1m = 0
-proj_3m = 0
-
-asset_proj_3m = [] # For Pie Chart
+proj_1m   = 0
+proj_3m   = 0
+asset_proj_3m = []
 
 for r in rows_summary:
-    t = r["ticker"]
-    qty = r["qty"]
-    current_p = r["current_price"]
-
-    # Get Mid Predictions
-    pred, _ = get_mid_prediction(report, t)
-
-    # 1 Month Logic
-    if pred and "tahmin_1ay" in pred:
-        p_1m = pred["tahmin_1ay"]
-    else:
-        p_1m = current_p # Fallback to current if no pred
-
-    # 3 Month Logic
-    if pred and "tahmin_3ay" in pred:
-        p_3m = pred["tahmin_3ay"]
-    else:
-        p_3m = current_p # Fallback
-
+    t          = r["ticker"]
+    qty        = r["qty"]
+    current_p  = r["current_price"]
+    pred, _    = get_mid_prediction(report, t)
+    p_1m = pred["tahmin_1ay"] if pred and "tahmin_1ay" in pred else current_p
+    p_3m = pred["tahmin_3ay"] if pred and "tahmin_3ay" in pred else current_p
     val_1m = qty * p_1m
     val_3m = qty * p_3m
-
-    proj_1m += val_1m
-    proj_3m += val_3m
-
+    proj_1m  += val_1m
+    proj_3m  += val_3m
     asset_proj_3m.append({"ticker": t, "value_3m": val_3m})
 
-# Data for Chart
-x_dates = ["Bugün", "1 Ay Sonra", "3 Ay Sonra"]
-y_values = [proj_current, proj_1m, proj_3m]
-
-# Calculate Growth for Metric Display
 growth_1m = ((proj_1m / proj_current) - 1) * 100 if proj_current > 0 else 0
 growth_3m = ((proj_3m / proj_current) - 1) * 100 if proj_current > 0 else 0
 
-# Short Term (1 Week) Interpolation
-# Assume linear path to 1 Month target
 days_1m = 30
 days_1w = 7
 if proj_current > 0:
-    daily_growth = (proj_1m / proj_current) ** (1/days_1m) - 1
+    daily_growth = (proj_1m / proj_current) ** (1 / days_1m) - 1
     proj_1w = proj_current * ((1 + daily_growth) ** days_1w)
 else:
     proj_1w = 0
-    
 growth_1w = ((proj_1w / proj_current) - 1) * 100 if proj_current > 0 else 0
 
-col_chart, col_pie_3m = st.columns([2, 1])
+# ── Büyüme Eğrisi Grafiği (tarih tabanlı, range butonlu) ────────────────────
+from datetime import date, timedelta as _td
+_today  = date.today()
+_d_1w   = _today + _td(days=7)
+_d_1m   = _today + _td(days=30)
+_d_3m   = _today + _td(days=90)
 
-with col_chart:
-    fig_proj = go.Figure()
-    
-    # Area Chart
-    fig_proj.add_trace(go.Scatter(
-        x=x_dates, y=y_values,
-        mode='lines+markers+text',
-        fill='tozeroy',
-        line=dict(color='#63b3ed', width=3.5),
-        marker=dict(size=10, color='#90cdf4', line=dict(width=2, color='#0a192f')),
-        text=[f"${v:,.0f}" for v in y_values],
-        textposition="top center",
-        name='Portföy Değeri'
-    ))
-    
-    fig_proj.update_layout(
-        title=f"Tahmini Büyüme Eğrisi (1 Ay - 3 Ay)",
-        font=dict(family="Space Mono", color="#ccd6f6"),
-        paper_bgcolor='rgba(0,0,0,0)',
-        plot_bgcolor='rgba(10,25,47,0.5)',
-        xaxis=dict(
-            showgrid=False,
-            gridcolor="rgba(255,255,255,0.05)",
-            zeroline=False,
+x_dates_dt = [str(_today), str(_d_1w),  str(_d_1m),  str(_d_3m)]
+y_vals_dt  = [proj_current, proj_1w, proj_1m, proj_3m]
+labels_dt  = ["Bugün", "1 Hafta", "1 Ay", "3 Ay"]
+
+fig_proj = go.Figure()
+fig_proj.add_trace(go.Scatter(
+    x=x_dates_dt, y=y_vals_dt,
+    mode='lines+markers+text',
+    fill='tozeroy',
+    fillcolor='rgba(99,179,237,0.08)',
+    line=dict(color='#63b3ed', width=3),
+    marker=dict(size=9, color='#90cdf4', line=dict(width=2, color='#0a192f')),
+    text=[f"${v:,.0f}" for v in y_vals_dt],
+    textposition="top center",
+    customdata=labels_dt,
+    hovertemplate="%{customdata}<br>$%{y:,.2f}<extra></extra>",
+    name='Portföy Değeri',
+))
+fig_proj.update_layout(
+    title=dict(text="Tahmini Büyüme Eğrisi", font=dict(size=13, color="#ccd6f6")),
+    font=dict(family="Space Mono", color="#ccd6f6", size=11),
+    paper_bgcolor='rgba(0,0,0,0)',
+    plot_bgcolor='rgba(10,25,47,0.5)',
+    xaxis=dict(
+        type="date",
+        showgrid=False,
+        zeroline=False,
+        rangeselector=dict(
+            buttons=[
+                dict(count=7,  label="1H", step="day",   stepmode="backward"),
+                dict(count=1,  label="1A", step="month",  stepmode="backward"),
+                dict(count=3,  label="3A", step="month",  stepmode="backward"),
+                dict(step="all", label="Tümü"),
+            ],
+            bgcolor="rgba(10,25,47,0.9)",
+            activecolor="#63b3ed",
+            bordercolor="rgba(99,179,237,0.2)",
+            font=dict(color="#ccd6f6", size=11),
         ),
-        yaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.1)', tickprefix="$"),
-        height=350,
-        margin=dict(l=20, r=20, t=60, b=20),
-        showlegend=False,
-        hovermode="x unified"
+    ),
+    yaxis=dict(
+        showgrid=True, gridcolor='rgba(255,255,255,0.06)',
+        zeroline=False, tickprefix="$",
+    ),
+    height=380,
+    margin=dict(l=20, r=20, t=60, b=20),
+    showlegend=False,
+    hovermode="x unified",
+)
+st.plotly_chart(fig_proj, width='stretch')
+
+# ── 3 Aşamalı Büyüme Kartları (tam genişlik) ───────────────────────────────
+st.markdown(
+    '<div class="pf-section-header" style="margin-top:8px;">📊 Tahmini Büyüme — 3 Aşama</div>',
+    unsafe_allow_html=True,
+)
+m1, m2, m3 = st.columns(3)
+
+for col, label, proj_val, growth_val in [
+    (m1, "Kısa Vade  (1 Hafta)", proj_1w, growth_1w),
+    (m2, "Orta Vade  (1 Ay)",   proj_1m, growth_1m),
+    (m3, "Uzun Vade  (3 Ay)",   proj_3m, growth_3m),
+]:
+    d_cls = "pf-metric-delta-up" if growth_val >= 0 else "pf-metric-delta-down"
+    with col:
+        st.markdown(
+            f"""
+            <div class="pf-metric-card">
+                <div class="pf-metric-label">{label}</div>
+                <div class="pf-metric-value">${proj_val:,.2f}</div>
+                <div class="{d_cls}">{growth_val:+.2f}%</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+st.markdown("<br>", unsafe_allow_html=True)
+
+# ── Portföy Ağırlıkları Pie + Detay Tablosu (tam genişlik, yan yana) ───────
+# ── 2 Pie yan yana ──────────────────────────────────────────────────────────
+st.markdown('<div class="pf-section-header">📋 Portföy Detayı</div>', unsafe_allow_html=True)
+
+# Hedef dağılım vade seçimi
+_vade_ctrl_l, _vade_ctrl_r = st.columns([1, 3])
+with _vade_ctrl_l:
+    _vade = st.radio(
+        "Hedef Dağılım Vadesi",
+        ["1 Hafta", "1 Ay", "3 Ay"],
+        index=2,
+        horizontal=True,
+        key="pf_hedef_vade",
+        label_visibility="collapsed",
     )
-    st.plotly_chart(fig_proj, width='stretch')
 
-    # 3-Stage Progress Metrics
-    st.markdown('<div style="font-family:\'Space Mono\';font-size:0.85rem;color:#8892b0;margin-bottom:8px;text-transform:uppercase;letter-spacing:1px;">Tahmini Büyüme (3 Aşamalı)</div>', unsafe_allow_html=True)
-    m1, m2, m3 = st.columns(3)
-    
-    with m1:
-        d_cls = "pf-metric-delta-up" if growth_1w >= 0 else "pf-metric-delta-down"
-        st.markdown(f"""
-        <div class="pf-metric-card" style="padding:15px;">
-            <div class="pf-metric-label">Kısa Vade (1 Hafta)</div>
-            <div class="pf-metric-value" style="font-size:1.4rem">${proj_1w:,.2f}</div>
-            <div class="{d_cls}">{growth_1w:+.2f}%</div>
-        </div>
-        """, unsafe_allow_html=True)
-        
-    with m2:
-        d_cls = "pf-metric-delta-up" if growth_1m >= 0 else "pf-metric-delta-down"
-        st.markdown(f"""
-        <div class="pf-metric-card" style="padding:15px;">
-            <div class="pf-metric-label">Orta Vade (1 Ay)</div>
-            <div class="pf-metric-value" style="font-size:1.4rem">${proj_1m:,.2f}</div>
-            <div class="{d_cls}">{growth_1m:+.2f}%</div>
-        </div>
-        """, unsafe_allow_html=True)
+# Seçili vadeye göre projeksiyon değerlerini hesapla
+_hedef_values = []
+for r in rows_summary:
+    t         = r["ticker"]
+    qty       = r["qty"]
+    cur_p     = r["current_price"]
+    pred, _   = get_mid_prediction(report, t)
 
-    with m3:
-        d_cls = "pf-metric-delta-up" if growth_3m >= 0 else "pf-metric-delta-down"
-        st.markdown(f"""
-        <div class="pf-metric-card" style="padding:15px;">
-            <div class="pf-metric-label">Uzun Vade (3 Ay)</div>
-            <div class="pf-metric-value" style="font-size:1.4rem">${proj_3m:,.2f}</div>
-            <div class="{d_cls}">{growth_3m:+.2f}%</div>
-        </div>
-        """, unsafe_allow_html=True)
+    if _vade == "1 Hafta":
+        if pred and "tahmin_1ay" in pred:
+            _daily = (pred["tahmin_1ay"] / cur_p) ** (1 / 30) - 1 if cur_p > 0 else 0
+            _p = cur_p * ((1 + _daily) ** 7)
+        else:
+            _p = cur_p
+    elif _vade == "1 Ay":
+        _p = pred["tahmin_1ay"] if pred and "tahmin_1ay" in pred else cur_p
+    else:  # 3 Ay
+        _p = pred["tahmin_3ay"] if pred and "tahmin_3ay" in pred else cur_p
 
-with col_pie_3m:
-    st.markdown('<div style="text-align:center;font-size:0.9rem;color:#8892b0;margin-bottom:10px;">3 Ay Sonraki Hedef Dağılım</div>', unsafe_allow_html=True)
+    _hedef_values.append({"ticker": t, "value": qty * _p})
 
-    labels_3m = [x["ticker"] for x in asset_proj_3m]
-    values_3m = [x["value_3m"] for x in asset_proj_3m]
+# ── İki pie yan yana
+pc_left, pc_right = st.columns(2)
 
-    fig_pie_3m = px.pie(
-        names=labels_3m, values=values_3m,
-        color_discrete_sequence=px.colors.qualitative.Pastel,
-        hole=0.5
-    )
-    fig_pie_3m.update_layout(
-        template="plotly_dark",
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        height=280,
-        margin=dict(l=10, r=10, t=10, b=10),
-        font=dict(color="#8892b0"),
-        showlegend=False
-    )
-    fig_pie_3m.update_traces(textposition='inside', textinfo='percent+label')
-    st.plotly_chart(fig_pie_3m, width='stretch')
-
-# Ağırlık Pie Chart + Tablo
-col_pie, col_table = st.columns([1, 2])
-
-with col_pie:
-    labels = [r["ticker"] for r in rows_summary]
-    values = [r["value"] for r in rows_summary]
-    fig_pie = px.pie(
-        names=labels, values=values,
-        title="Portföy Ağırlıkları",
+with pc_left:
+    labels_cur = [r["ticker"] for r in rows_summary]
+    values_cur = [r["value"]  for r in rows_summary]
+    _fig_pie_cur = px.pie(
+        names=labels_cur, values=values_cur,
+        title="Mevcut Portföy Ağırlıkları",
         color_discrete_sequence=px.colors.qualitative.Set3,
-        hole=0.4
+        hole=0.45,
     )
-    fig_pie.update_layout(
+    _fig_pie_cur.update_layout(
         template="plotly_dark",
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        height=350,
-        margin=dict(l=20, r=20, t=40, b=20),
-        font=dict(color="#8892b0"),
+        height=320,
+        margin=dict(l=10, r=10, t=46, b=10),
+        font=dict(color="#8892b0", size=11),
+        title_font=dict(color="#ccd6f6", size=13),
+        legend=dict(orientation="h", y=-0.12, font=dict(size=10)),
     )
-    st.plotly_chart(fig_pie, width='stretch')
+    _fig_pie_cur.update_traces(textposition="inside", textinfo="percent+label")
+    st.plotly_chart(_fig_pie_cur, width="stretch")
 
-with col_table:
-    # Detay tablosu (HTML)
-    table_html = '<table class="pf-table"><thead><tr>'
-    headers = ["Hisse", "Adet", "Alış", "Güncel", "Değer", "K/Z", "Temettü", "Yıl. Temettü"]
-    for h in headers:
-        table_html += f"<th>{h}</th>"
-    table_html += "</tr></thead><tbody>"
+with pc_right:
+    labels_hedef = [x["ticker"] for x in _hedef_values]
+    values_hedef = [x["value"]  for x in _hedef_values]
+    _fig_pie_hedef = px.pie(
+        names=labels_hedef, values=values_hedef,
+        title=f"Hedef Dağılım — {_vade}",
+        color_discrete_sequence=px.colors.qualitative.Pastel,
+        hole=0.45,
+    )
+    _fig_pie_hedef.update_layout(
+        template="plotly_dark",
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        height=320,
+        margin=dict(l=10, r=10, t=46, b=10),
+        font=dict(color="#8892b0", size=11),
+        title_font=dict(color="#ccd6f6", size=13),
+        legend=dict(orientation="h", y=-0.12, font=dict(size=10)),
+    )
+    _fig_pie_hedef.update_traces(textposition="inside", textinfo="percent+label")
+    st.plotly_chart(_fig_pie_hedef, width="stretch")
 
-    for r in rows_summary:
-        pnl_color = "#64ffda" if r["pnl"] >= 0 else "#ff6b6b"
-        div_badge = '<span class="pf-div-yes">✓ Evet</span>' if r["pays_div"] else '<span class="pf-div-no">Hayır</span>'
-        table_html += f"""<tr>
-            <td><strong>{r['ticker']}</strong><br><span style="font-size:0.7rem;color:#8892b0">{r['name']}</span></td>
-            <td>{r['qty']}</td>
-            <td>${r['buy_price']:.2f}</td>
-            <td>${r['current_price']:.2f}</td>
-            <td>${r['value']:,.2f}<br><span style="font-size:0.7rem;color:#8892b0">{r['value']/total_value*100:.1f}%</span></td>
-            <td style="color:{pnl_color}">${r['pnl']:+,.2f}<br>{r['pnl_pct']:+.1f}%</td>
-            <td>{div_badge}<br><span style="font-size:0.7rem;color:#8892b0">{r['div_yield']:.2f}%</span></td>
-            <td>${r['est_annual_div_income']:,.2f}</td>
-        </tr>"""
+st.markdown("<br>", unsafe_allow_html=True)
 
-    table_html += "</tbody></table>"
-    st.markdown(table_html, unsafe_allow_html=True)
+# ── Detay tablosu (tam genişlik, pie'ların altında) ──────────────────────────
+table_html = '<table class="pf-table"><thead><tr>'
+for h in ["Hisse", "Adet", "Alış", "Güncel", "Değer", "K/Z", "Temettü", "Yıl. Temettü"]:
+    table_html += f"<th>{h}</th>"
+table_html += "</tr></thead><tbody>"
+
+for r in rows_summary:
+    pnl_color    = "#64ffda" if r["pnl"] >= 0 else "#ff6b6b"
+    div_badge    = ('<span class="pf-div-yes">✓ Evet</span>'
+                   if r["pays_div"] else
+                   '<span class="pf-div-no">Hayır</span>')
+    pct_of_total = r["value"] / total_value * 100 if total_value > 0 else 0
+    table_html  += f"""
+    <tr>
+        <td><strong>{r['ticker']}</strong>
+            <br><span style="font-size:0.7rem;color:#8892b0">{r['name']}</span></td>
+        <td>{r['qty']}</td>
+        <td>${r['buy_price']:.2f}</td>
+        <td>${r['current_price']:.2f}</td>
+        <td>${r['value']:,.2f}
+            <br><span style="font-size:0.7rem;color:#8892b0">{pct_of_total:.1f}%</span></td>
+        <td style="color:{pnl_color}">${r['pnl']:+,.2f}
+            <br>{r['pnl_pct']:+.1f}%</td>
+        <td>{div_badge}
+            <br><span style="font-size:0.7rem;color:#8892b0">{r['div_yield']:.2f}%</span></td>
+        <td>${r['est_annual_div_income']:,.2f}</td>
+    </tr>"""
+
+table_html += "</tbody></table>"
+st.markdown(table_html, unsafe_allow_html=True)
+
 
 
 # =========================================================
