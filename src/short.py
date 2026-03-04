@@ -18,11 +18,11 @@ import yfinance as yf
 warnings.filterwarnings("ignore")
 
 # Proje kökünü sys.path'e ekle (config ve features import'ları için)
-_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
-from config import TICKERS, TICKER_TO_NAME, DATA_DIR, HORIZONS, to_yf_symbol
+from config import TICKERS, TICKER_TO_NAME, HORIZONS, to_yf_symbol
 from features import build_features, get_feature_cols
 
 
@@ -102,35 +102,26 @@ def _fetch_live(ticker: str) -> pd.DataFrame | None:
         return None
 
 
-@st.cache_data(show_spinner=False)
-def _load_kaggle(ticker: str) -> pd.DataFrame | None:
-    base = ticker.replace(".US", "") if ticker.endswith(".US") else ticker
-    for p in [DATA_DIR / f"{base}.US_D1.csv",
-              DATA_DIR / f"{ticker}_D1.csv",
-              DATA_DIR / f"{base.upper()}.US_D1.csv",
-              DATA_DIR / f"{ticker}.csv",
-              DATA_DIR / f"{base}.csv"]:
-        if not p.exists():
-            continue
-        try:
-            df = pd.read_csv(p)
-            df.columns = [c.strip().title() for c in df.columns]
-            df.rename(columns={"Adj Close": "Close", "Adj_Close": "Close"}, inplace=True)
-            dc = next((c for c in df.columns
-                       if c.lower() in ("date", "datetime", "time")), df.columns[0])
-            df[dc] = pd.to_datetime(df[dc], errors="coerce")
-            df = df.dropna(subset=[dc]).set_index(dc).sort_index()
-            df.index.name = "Date"
-            cols = ["Open", "High", "Low", "Close", "Volume"]
-            if not all(c in df.columns for c in cols):
-                continue
-            df = df[cols].apply(pd.to_numeric, errors="coerce").dropna()
-            df = df[(df["Close"] > 0) & (df["Volume"] > 0)]
-            if len(df) >= 200:
-                return df
-        except Exception:
-            continue
-    return None
+@st.cache_data(ttl=86400, show_spinner=False)
+def _fetch_yf_history(ticker: str) -> pd.DataFrame | None:
+    """yfinance — son 2 yıl günlük veri (tahmin için feature hesabına yeterli).
+    ttl=86400 → günlük cache, lokal dosyaya gerek yok."""
+    try:
+        sym = to_yf_symbol(ticker)
+        df = yf.download(sym, period="2y", interval="1d",
+                         progress=False, auto_adjust=True)
+        if df.empty:
+            return None
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.get_level_values(0)
+        df.index = pd.to_datetime(df.index)
+        df.index.name = "Date"
+        cols = ["Open", "High", "Low", "Close", "Volume"]
+        df = df[cols].apply(pd.to_numeric, errors="coerce").dropna()
+        df = df[(df["Close"] > 0) & (df["Volume"] > 0)]
+        return df if len(df) >= 200 else None
+    except Exception:
+        return None
 
 
 def _load_bundle(ticker, h, algo):
@@ -141,10 +132,10 @@ def _load_bundle(ticker, h, algo):
 @st.cache_data(ttl=300, show_spinner=False)
 def _run_prediction(ticker: str) -> dict:
     """
-    En son Kaggle verisi üzerinde tahmin üret.
+    yFinance geçmiş verisi üzerinde tahmin üret.
     Son satır = bugünün tahmini.
     """
-    raw = _load_kaggle(ticker)
+    raw = _fetch_yf_history(ticker)
     if raw is None:
         return {}
 
@@ -218,7 +209,6 @@ def render_short_dashboard(selected_ticker: str) -> None:
     cname = TICKER_TO_NAME.get(selected_ticker, selected_ticker)
 
     # ── Model / veri durumu bilgisi
-    kdf = _load_kaggle(selected_ticker)
     model_dir = _PROJECT_ROOT / "models" / selected_ticker
     model_ok = model_dir.exists() and any(model_dir.glob("*.pkl"))
 
@@ -230,10 +220,6 @@ def render_short_dashboard(selected_ticker: str) -> None:
             f"⚠ {selected_ticker} için eğitilmiş model bulunamadı.\n\n"
             f"```\npoetry run python train.py --ticker {selected_ticker}\n```"
         )
-
-    if kdf is not None:
-        last_train = kdf.index[-1].date()
-        st.caption(f"Eğitim verisi bitiş: {last_train} · {len(kdf):,} işlem günü")
 
     # ── Canlı fiyat header
     live_df = _fetch_live(selected_ticker)
