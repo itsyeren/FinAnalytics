@@ -8,7 +8,10 @@ import ta
 import warnings
 warnings.filterwarnings("ignore")
 
-from config import HORIZONS, THRESHOLD
+try:
+    from short_model.config import HORIZONS, THRESHOLD
+except ImportError:
+    from config import HORIZONS, THRESHOLD
 
 
 def make_targets(df: pd.DataFrame) -> pd.DataFrame:

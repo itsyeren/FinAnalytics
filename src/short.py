@@ -22,8 +22,8 @@ _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
-from config import TICKERS, TICKER_TO_NAME, HORIZONS, to_yf_symbol
-from features import build_features, get_feature_cols
+from short_model.config import TICKERS, TICKER_TO_NAME, HORIZONS, to_yf_symbol
+from short_model.features import build_features, get_feature_cols
 
 
 # ── CSS (App.py'nin genel stilini bozmamak için scope'lu)
