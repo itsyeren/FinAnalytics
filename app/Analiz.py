@@ -829,7 +829,7 @@ Bu sekme, Retrieval-Augmented Generation (RAG) akışında semantik retrieval ka
     # ── Bilgi kartları ───────────────────────────────────────────────────────
     info_c1, info_c2, info_c3, info_c4 = st.columns(4)
     info_c1.metric("🔍 Retrieval", "SFT Dataset", help="Eğitim dataseti üzerinden benzer örnekler çekilir.")
-    info_c2.metric("🧠 Model", "Gemini 1.5 Flash", help="Google Gemini API üzerinden çalışır.")
+    info_c2.metric("🧠 Model", "Gemini 2.5 Flash Lite", help="Google Gemini API üzerinden çalışır.")
     info_c3.metric("📈 Hisse", f"{selected_ticker}", help="Sohbet bağlamı bu hisse için özelleştirilir.")
     rag_session_key_info = f"rag_messages_{selected_ticker}"
     _msg_count = max(0, len(st.session_state.get(rag_session_key_info, [])) - 1)
@@ -958,7 +958,7 @@ Bu sekme, Retrieval-Augmented Generation (RAG) akışında semantik retrieval ka
             with col_info:
                 st.markdown(
                     f"<div style='font-size:11px; color: grey; padding-top:6px;'>"
-                    f"🔵 {selected_label}<br>⚡ gemini-1.5-flash</div>",
+                    f"🔵 {selected_label}<br>⚡ gemini-2.5-flash-lite</div>",
                     unsafe_allow_html=True,
                 )
 
@@ -1063,7 +1063,7 @@ Bu sekme, Retrieval-Augmented Generation (RAG) akışında semantik retrieval ka
                         answer = generate_text(
                             prompt=prompt,
                             system_instruction=system_instruction,
-                            model="gemini-1.5-flash",
+                            model="gemini-2.5-flash-lite",
                             max_output_tokens=max_tokens,
                             temperature=temperature,
                         )
