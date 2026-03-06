@@ -829,7 +829,7 @@ Bu sekme, Retrieval-Augmented Generation (RAG) akışında semantik retrieval ka
     # ── Bilgi kartları ───────────────────────────────────────────────────────
     info_c1, info_c2, info_c3, info_c4 = st.columns(4)
     info_c1.metric("🔍 Retrieval", "SFT Dataset", help="Eğitim dataseti üzerinden benzer örnekler çekilir.")
-    info_c2.metric("🧠 Model", "Gemini 2.5 Flash Lite", help="Google Gemini API üzerinden çalışır.")
+    info_c2.metric("🧠 Model", "Gemini 2.0 Flash Lite", help="Google Gemini API üzerinden çalışır.")
     info_c3.metric("📈 Hisse", f"{selected_ticker}", help="Sohbet bağlamı bu hisse için özelleştirilir.")
     rag_session_key_info = f"rag_messages_{selected_ticker}"
     _msg_count = max(0, len(st.session_state.get(rag_session_key_info, [])) - 1)
@@ -914,6 +914,12 @@ Bu sekme, Retrieval-Augmented Generation (RAG) akışında semantik retrieval ka
                     "dikkate alarak yanıt üretir."
                 ),
             )
+            # 4. Haber Bağlamı Uyarısı
+            if include_news_ctx:
+                ticker_ctx = (st.session_state.get("llm_ticker_ctx") or "").strip()
+                industry_ctx = (st.session_state.get("llm_industry_ctx") or "").strip()
+                if not (ticker_ctx or industry_ctx):
+                    st.info("ℹ️ Haber bağlamı boş. Lütfen önce **Haber Bülteni** sekmesine gidip güncel haberleri çekin.")
 
             st.markdown("**🔬 Geliştirici**")
             dev_mode = os.getenv(RAG_DEBUG_ENV_FLAG, "").strip() == "1"
@@ -1057,7 +1063,7 @@ Bu sekme, Retrieval-Augmented Generation (RAG) akışında semantik retrieval ka
                         answer = generate_text(
                             prompt=prompt,
                             system_instruction=system_instruction,
-                            model="gemini-2.5-flash-lite",
+                            model="gemini-2.0-flash-lite",
                             max_output_tokens=max_tokens,
                             temperature=temperature,
                         )
@@ -1171,9 +1177,13 @@ with tabs[6]:
                     from src.mid import _load_json_report, _get_stock_prediction
                     mid_report = _load_json_report()
                     _mid_result = _get_stock_prediction(mid_report, selected_ticker)
-                    # _get_stock_prediction (pred, sector_name) → 2-tuple döndürür
-                    mid_pred   = _mid_result[0] if _mid_result else None
-                    mid_sector = _mid_result[1] if _mid_result else None
+                    # _get_stock_prediction (pred, sector_name) 
+                    mid_pred = None
+                    mid_sector = None
+                    if _mid_result and len(_mid_result) >= 2:
+                        mid_pred   = _mid_result[0]
+                        mid_sector = _mid_result[1]
+
                     mid_data = {
                         "son_fiyat":      mid_pred.get("son_fiyat", 0),
                         "tahmin_1ay":     mid_pred.get("tahmin_1ay", 0),
