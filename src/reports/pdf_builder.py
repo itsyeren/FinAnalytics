@@ -176,7 +176,7 @@ class _PDF(FPDF):
     # ── Footer ───────────────────────────────────────────────────
     def footer(self) -> None:
         self.set_y(-14)
-        self.set_font(self._font_family, "I", 7.5)
+        self.set_font(self._font_family, "", 7.5)
         self.set_text_color(160, 170, 190)
         self.cell(0, 5,
                   "Bu rapor eğitim/araştırma amacıdır. Yatırım tavsiyesi değildir.",
