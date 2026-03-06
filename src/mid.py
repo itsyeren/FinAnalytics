@@ -1,8 +1,8 @@
 """
 src/mid.py — Orta Vadeli Tahmin Dashboard
 ==========================================
-RandomForest + LightGBM Regressor · 1M / 3M tahminler
-render_mid_dashboard(selected_ticker) olarak Analysis.py'den çağrılır.
+RandomForest + LightGBM Regressor · 1A / 3A tahminler.
+Analysis.py'den render_mid_dashboard(selected_ticker) olarak çağrılır.
 """
 
 import json
@@ -53,10 +53,10 @@ except Exception:
     _client     = None
 
 # ── JSON rapor yolu ───────────────────────────────────────────────────────────
-_MULTI_SEKTOR_DIR = _ROOT_DIR / "multi_sektor_analiz" if _ROOT_DIR else Path(".")
-_SECTOR_JSON      = _MULTI_SEKTOR_DIR / "reports" / "sector_optimized_params.json"
+_MULTI_SEKTOR_DIR = _ROOT_DIR / "models" / "mid_term" if _ROOT_DIR else Path(".")
+_SECTOR_JSON      = _MULTI_SEKTOR_DIR / "sector_optimized_params.json"
 if not _SECTOR_JSON.exists():
-    _SECTOR_JSON  = _MULTI_SEKTOR_DIR / "sector_optimized_params.json"
+    _SECTOR_JSON  = _MULTI_SEKTOR_DIR / "src" / "reports" / "sector_optimized_params.json"
 
 
 # ── CSS ───────────────────────────────────────────────────────────────────────
@@ -103,7 +103,7 @@ _MID_CSS = """
 .mid-delta-up   { color: #64ffda; font-size: 0.85rem; font-weight: 600; margin-top: 4px; }
 .mid-delta-down { color: #ff6b6b; font-size: 0.85rem; font-weight: 600; margin-top: 4px; }
 
-/* Sinyal pills */
+/* Sinyal pilleri */
 .mid-sig-al {
     background: linear-gradient(135deg, #00b894, #00cec9);
     color: #fff; padding: 5px 16px; border-radius: 20px;
@@ -172,6 +172,7 @@ def _get_stock_prediction(report, symbol):
 
 
 def _signal_badge(signal: str) -> str:
+    """Ham sinyal metnine göre renkli badge HTML üretir."""
     cls = {
         "AL":    "mid-sig-al",
         "BEKLE": "mid-sig-bekle",
@@ -279,7 +280,7 @@ def render_mid_dashboard(selected_ticker: str) -> None:
     days_back = {"6 Ay": 180, "1 Yıl": 365, "2 Yıl": 730}[time_range]
 
     # ── Fiyat + tahmin grafiği ───────────────────────────────────────────────
-    st.markdown('<div class="mid-section-header">📈 Fiyat Grafiği & Tahminler</div>',
+    st.markdown('<div class="mid-section-header">📈 Fiyat Grafiği &amp; Tahminler</div>',
                 unsafe_allow_html=True)
 
     with st.spinner(f"{active_stock} fiyat verisi yükleniyor…"):
@@ -370,7 +371,7 @@ def render_mid_dashboard(selected_ticker: str) -> None:
         else:
             st.warning(f"⚠️ {active_stock} için fiyat verisi alınamadı.")
 
-    # ── Footer ────────────────────────────────────────────────────────────────
+    # ── Alt bilgi ────────────────────────────────────────────────────────────
     meta = report.get("metadata", {})
     if meta:
         parts = []

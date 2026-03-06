@@ -1,8 +1,8 @@
 """
-app/pages/long.py — Trend Hunter AI · Long-Term Model Dashboard
-================================================================
-3-Class Ranking Model: UP / NEUTRAL / DOWN
-22–63 Day Horizon · render_long_dashboard(selected_ticker) olarak App.py'den çağrılır.
+src/long.py — Uzun Vadeli Model Dashboard (Trend Hunter AI)
+============================================================
+3-Sınıflı Sıralama Modeli: YÜKSELİŞ / NÖTR / DÜŞÜŞ
+22–63 Gün Ufku · Analysis.py'den render_long_dashboard(selected_ticker) olarak çağrılır.
 """
 
 import streamlit as st
@@ -16,7 +16,7 @@ from pathlib import Path
 
 
 # =========================================================
-# ROOT PATH FINDER
+# PROJE KÖK BULMA
 # =========================================================
 def _find_project_root():
     current = Path(__file__).resolve()
@@ -32,7 +32,7 @@ if _ROOT_DIR and str(_ROOT_DIR) not in sys.path:
     sys.path.append(str(_ROOT_DIR))
 
 # =========================================================
-# IMPORTS
+# IMPORT
 # =========================================================
 try:
     from src.config import UNIVERSE
@@ -43,25 +43,25 @@ except ImportError:
     UNIVERSE = []
 
 try:
-    # Root config.py'den tam TICKER_TO_NAME haritası
-    import importlib.util as _ilu, sys as _sys
-    _cfg_path = _ROOT_DIR / "config.py" if _ROOT_DIR else None
+    # TICKER_TO_NAME haritasını models/kisa_vadeli/kaynak/config.py'den yükle
+    import importlib.util as _ilu
+    _cfg_path = _ROOT_DIR / "models" / "short_term" / "src" / "config.py" if _ROOT_DIR else None
     if _cfg_path and _cfg_path.exists():
-        _spec = _ilu.spec_from_file_location("_root_config", _cfg_path)
-        _root_cfg = _ilu.module_from_spec(_spec)
-        _spec.loader.exec_module(_root_cfg)
-        _TICKER_TO_NAME: dict = getattr(_root_cfg, "TICKER_TO_NAME", {})
+        _spec = _ilu.spec_from_file_location("_short_config", _cfg_path)
+        _short_cfg = _ilu.module_from_spec(_spec)
+        _spec.loader.exec_module(_short_cfg)
+        _TICKER_TO_NAME: dict = getattr(_short_cfg, "TICKER_TO_NAME", {})
     else:
         _TICKER_TO_NAME = {}
 except Exception:
     _TICKER_TO_NAME = {}
 
-_MODEL_PATH = _ROOT_DIR / "models/long_model.pkl" if _ROOT_DIR else Path(".")
+_MODEL_PATH      = _ROOT_DIR / "models" / "long_term" / "long_model.pkl" if _ROOT_DIR else Path(".")
 _ALL_STOCKS_PATH = _ROOT_DIR / "data/all_stocks.csv" if _ROOT_DIR else Path(".")
 
 
 # =========================================================
-# CSS — Scoped for long dashboard
+# CSS — Uzun vadeli dashboard'a özel
 # =========================================================
 _LONG_CSS = """
 <style>
@@ -170,7 +170,7 @@ _LONG_CSS = """
 .long-rank-bar-wrap { width: 80px; height: 5px; background: #1C2432; border-radius: 3px; overflow: hidden; display: inline-block; vertical-align: middle; margin-left: 8px; }
 .long-rank-bar-fill { height: 100%; border-radius: 3px; }
 
-/* Score card grid — equal height */
+/* Score card ızgarası — eşit yükseklik */
 .long-card-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -189,7 +189,7 @@ _LONG_CSS = """
 
 
 # =========================================================
-# DATA + PREDICTION
+# VERİ + TAHMİN
 # =========================================================
 @st.cache_data(ttl=3600)
 def _load_data_and_predict():
@@ -197,14 +197,14 @@ def _load_data_and_predict():
         return None, None, "src.config veya src.features import edilemedi"
 
     if not _MODEL_PATH.exists():
-        return None, None, "Model not found"
+        return None, None, "Model dosyası bulunamadı"
 
     payload = joblib.load(_MODEL_PATH)
     model = payload["model"]
     feature_cols = payload["feature_cols"]
 
     if not _ALL_STOCKS_PATH.exists():
-        return None, None, f"Data file not found: {_ALL_STOCKS_PATH}"
+        return None, None, f"Veri dosyası bulunamadı: {_ALL_STOCKS_PATH}"
 
     try:
         df_all = pd.read_csv(_ALL_STOCKS_PATH)
@@ -225,13 +225,13 @@ def _load_data_and_predict():
                 dfs.append(temp.tail(400))
 
         if not dfs:
-            return None, None, "No matching data in all_stocks.csv"
+            return None, None, "all_stocks.csv'de eşleşen veri bulunamadı"
 
         df = pd.concat(dfs)
         df = df.sort_values(["ticker", "datetime"])
 
     except Exception as e:
-        return None, None, f"Error loading data: {e}"
+        return None, None, f"Veri yükleme hatası: {e}"
 
     df = add_features(df, normalize=True)
 
@@ -239,16 +239,16 @@ def _load_data_and_predict():
     latest = df[df["datetime"] == last_date].copy()
 
     if latest.empty:
-        return None, None, "Empty latest data"
+        return None, None, "Son tarih verisi boş"
 
-    # 3-class model: 0=Down, 1=Neutral, 2=Up
+    # 3-sınıflı model: 0=Düşüş, 1=Nötr, 2=Yükseliş
     proba_matrix = model.predict_proba(latest[feature_cols])
     latest["prob_down"] = proba_matrix[:, 0]
     latest["prob_neutral"] = proba_matrix[:, 1]
     latest["prob_up"] = proba_matrix[:, 2]
 
     latest["pred_class"] = model.predict(latest[feature_cols])
-    latest["pred_label"] = latest["pred_class"].map({0: "DOWN", 1: "NEUTRAL", 2: "UP"})
+    latest["pred_label"] = latest["pred_class"].map({0: "DÜŞÜŞ", 1: "NÖTR", 2: "YÜKSELİŞ"})
 
     up_p = proba_matrix[:, 2]
     min_p, max_p = up_p.min(), up_p.max()
@@ -262,7 +262,7 @@ def _load_data_and_predict():
 # ANA RENDER FONKSİYONU
 # =========================================================
 def render_long_dashboard(selected_ticker: str) -> None:
-    """App.py'den çağrılır. Uzun vadeli model sonuçlarını gösterir."""
+    """Analysis.py'den çağrılır. Uzun vadeli model sonuçlarını gösterir."""
 
     st.markdown(_LONG_CSS, unsafe_allow_html=True)
 
@@ -280,26 +280,29 @@ def render_long_dashboard(selected_ticker: str) -> None:
         st.warning("Model sonuçları yüklenemedi.")
         return
 
-    # ── Top 5 Leaderboard
-    st.markdown('<div class="long-section-header">Top Ranked</div>', unsafe_allow_html=True)
+    # ── En Yüksek 5 Sıralama
+    st.markdown('<div class="long-section-header">En Yüksek Sıralama</div>', unsafe_allow_html=True)
     top5 = results.head(5)
 
     rows_html = []
     for i, (_, r) in enumerate(top5.iterrows()):
         ticker    = str(r["ticker"])
-        cname     = _TICKER_TO_NAME.get(ticker, ticker)   # şirket adı
+        cname     = _TICKER_TO_NAME.get(ticker, ticker)
         score     = float(r["model_score"])
-        label     = str(r.get("pred_label", "UP"))
+        label     = str(r.get("pred_label", "YÜKSELİŞ"))
         mom_val   = float(r.get("mom_126", 0))
         slope_val = float(r.get("sma50_slope20", 0))
         prob_up   = float(r.get("prob_up", 0))
 
-        badge_cls = {"UP": "long-signal-up", "DOWN": "long-signal-down",
-                     "NEUTRAL": "long-signal-neutral"}.get(label, "long-signal-neutral")
+        badge_cls = {
+            "YÜKSELİŞ": "long-signal-up",
+            "DÜŞÜŞ":    "long-signal-down",
+            "NÖTR":     "long-signal-neutral",
+        }.get(label, "long-signal-neutral")
         mom_color   = "#2ECC71" if mom_val   >= 0 else "#E74C3C"
         slope_color = "#2ECC71" if slope_val >= 0 else "#E74C3C"
         bar_w  = max(0, min(100, int(prob_up * 100)))
-        bar_color = "#2ECC71" if label == "UP" else ("#E74C3C" if label == "DOWN" else "#4A5568")
+        bar_color = "#2ECC71" if label == "YÜKSELİŞ" else ("#E74C3C" if label == "DÜŞÜŞ" else "#4A5568")
 
         rows_html.append(
             "<tr>"
@@ -307,8 +310,8 @@ def render_long_dashboard(selected_ticker: str) -> None:
             + f'<td class="long-rank-ticker">{cname}'
             +   f'<br><span style="font-size:9px;color:#4A5568;font-weight:400;letter-spacing:1px;">{ticker}</span></td>'
             + f'<td><span class="long-signal-badge {badge_cls}" style="font-size:9px;padding:2px 8px;">{label}</span></td>'
-            + f'<td style="color:{mom_color};text-align:right;">{"+" if mom_val >= 0 else ""}{mom_val:.2f}</td>'
-            + f'<td style="color:{slope_color};text-align:right;">{"+" if slope_val >= 0 else ""}{slope_val:.3f}</td>'
+            + f'<td style="color:{mom_color};text-align:right;">{("+" if mom_val >= 0 else "")}{mom_val:.2f}</td>'
+            + f'<td style="color:{slope_color};text-align:right;">{("+" if slope_val >= 0 else "")}{slope_val:.3f}</td>'
             + f'<td style="min-width:120px;">'
             +   f'<span class="long-rank-score-pill">{score:.0f}</span>'
             +   f'<span class="long-rank-bar-wrap"><div class="long-rank-bar-fill" style="width:{bar_w}%;background:{bar_color};"></div></span>'
@@ -320,11 +323,11 @@ def render_long_dashboard(selected_ticker: str) -> None:
         '<table class="long-rank-table">'
         '<thead><tr>'
         '<th style="width:28px"></th>'
-        '<th>Ticker</th>'
-        '<th>Signal</th>'
-        '<th style="text-align:right;">Mom 6M</th>'
-        '<th style="text-align:right;">Slope</th>'
-        '<th>Score</th>'
+        '<th>Hisse</th>'
+        '<th>Sinyal</th>'
+        '<th style="text-align:right;">Momentum 6A</th>'
+        '<th style="text-align:right;">Eğim</th>'
+        '<th>Skor</th>'
         '</tr></thead><tbody>'
         + "".join(rows_html)
         + "</tbody></table>"
@@ -334,7 +337,7 @@ def render_long_dashboard(selected_ticker: str) -> None:
     # ── Seçili ticker kontrolü
     available_tickers = results["ticker"].tolist()
     if selected_ticker not in available_tickers:
-        st.warning(f"**{selected_ticker}** uzun vadeli modelde bulunamadı.")
+        st.warning(f"**{selected_ticker}** uzun vadeli model evreninde bulunamadı.")
         return
 
     sel_ticker = selected_ticker
@@ -351,21 +354,24 @@ def render_long_dashboard(selected_ticker: str) -> None:
     prob_neutral = row["prob_neutral"]
     prob_down = row["prob_down"]
 
-    # ── PRICE HEADER
+    # ── FİYAT BAŞLIĞI
     st.markdown(f"""
     <div class="long-header-block">
         <div class="long-ticker-label">⚡ {sel_ticker}.US</div>
         <div class="long-big-price">${price:,.2f}</div>
-        <div class="long-price-sub">Last Close &nbsp;·&nbsp; Daily Chart</div>
+        <div class="long-price-sub">Son Kapanış &nbsp;·&nbsp; Günlük Grafik</div>
     </div>
     <div class="long-section-divider"></div>
     """, unsafe_allow_html=True)
 
-    # ── METRIC CARDS (CSS grid — eşit yükseklik)
+    # ── METRİK KARTLARI (CSS ızgarası — eşit yükseklik)
     score_pct = f"{model_score:.0f}"
     perc_str  = f"{percentile:.0f}"
-    badge_cls = {"UP": "long-signal-up", "DOWN": "long-signal-down",
-                 "NEUTRAL": "long-signal-neutral"}.get(pred_label, "long-signal-neutral")
+    badge_cls = {
+        "YÜKSELİŞ": "long-signal-up",
+        "DÜŞÜŞ":    "long-signal-down",
+        "NÖTR":     "long-signal-neutral",
+    }.get(pred_label, "long-signal-neutral")
     up_pct  = int(prob_up     * 100)
     ne_pct  = int(prob_neutral * 100)
     dn_pct  = int(prob_down   * 100)
@@ -376,58 +382,57 @@ def render_long_dashboard(selected_ticker: str) -> None:
     cards_html = f"""
     <div class="long-card-grid">
 
-      <!-- Card 1: Model Signal -->
+      <!-- Kart 1: Model Sinyali -->
       <div class="long-metric-card">
-        <div class="long-card-label">Model Signal</div>
+        <div class="long-card-label">Model Sinyali</div>
         <span class="long-signal-badge {badge_cls}">{pred_label}</span>
-        <div class="long-card-sub" style="margin-top:6px;">Score {score_pct}/100 &nbsp;·&nbsp; P{perc_str}</div>
+        <div class="long-card-sub" style="margin-top:6px;">Skor {score_pct}/100 &nbsp;·&nbsp; P{perc_str}</div>
         <div style="margin-top:10px;">
           <div class="long-prob-row">
-            <span class="long-prob-label">UP</span>
+            <span class="long-prob-label">YÜK</span>
             <div class="long-prob-track"><div class="long-prob-fill-up" style="width:{up_pct}%"></div></div>
             <span class="long-prob-pct">{up_pct}%</span>
           </div>
           <div class="long-prob-row">
-            <span class="long-prob-label">NEU</span>
+            <span class="long-prob-label">NÖT</span>
             <div class="long-prob-track"><div class="long-prob-fill-neutral" style="width:{ne_pct}%"></div></div>
             <span class="long-prob-pct">{ne_pct}%</span>
           </div>
           <div class="long-prob-row">
-            <span class="long-prob-label">DN</span>
+            <span class="long-prob-label">DÜŞ</span>
             <div class="long-prob-track"><div class="long-prob-fill-down" style="width:{dn_pct}%"></div></div>
             <span class="long-prob-pct">{dn_pct}%</span>
           </div>
         </div>
       </div>
 
-      <!-- Card 2: Momentum -->
+      <!-- Kart 2: Momentum -->
       <div class="long-metric-card">
-        <div class="long-card-label">Momentum 6M</div>
+        <div class="long-card-label">Momentum 6 Ay</div>
         <div class="long-card-value" style="color:{mom_color} !important;">{'+' if mom >= 0 else ''}{mom:.2f}</div>
-        <div class="long-card-sub">126-day return (normalized)</div>
+        <div class="long-card-sub">126 günlük getiri (normalize)</div>
       </div>
 
-      <!-- Card 3: Trend Slope -->
+      <!-- Kart 3: Trend Eğimi -->
       <div class="long-metric-card">
-        <div class="long-card-label">Trend Slope</div>
+        <div class="long-card-label">Trend Eğimi</div>
         <div class="long-card-value" style="color:{slope_color} !important;">{'+' if slope >= 0 else ''}{slope:.3f}</div>
-        <div class="long-card-sub">SMA50 slope (20-day window)</div>
+        <div class="long-card-sub">SMA50 eğimi (20 günlük pencere)</div>
       </div>
 
-      <!-- Card 4: Dist to SMA200 -->
+      <!-- Kart 4: SMA200'e Uzaklık -->
       <div class="long-metric-card">
-        <div class="long-card-label">Dist. to SMA200</div>
+        <div class="long-card-label">SMA200 Uzaklığı</div>
         <div class="long-card-value" style="color:{dist_color} !important;">{'+' if dist >= 0 else ''}{dist:.2f}</div>
-        <div class="long-card-sub">Relative positioning</div>
+        <div class="long-card-sub">Göreli konumlanma</div>
       </div>
 
     </div>
     """
     st.markdown(cards_html, unsafe_allow_html=True)
 
-
-    # ── PRICE CHART
-    st.markdown('<div class="long-section-header" style="margin-top:36px;">Price Action · 3 Month</div>',
+    # ── FİYAT GRAFİĞİ
+    st.markdown('<div class="long-section-header" style="margin-top:36px;">Fiyat Hareketi · 3 Ay</div>',
                 unsafe_allow_html=True)
 
     if history_df is not None:
@@ -440,7 +445,7 @@ def render_long_dashboard(selected_ticker: str) -> None:
 
             fig = go.Figure()
 
-            # Candlesticks
+            # Mum grafiği
             fig.add_trace(go.Candlestick(
                 x=hist["datetime"],
                 open=hist["open"], high=hist["high"],
@@ -449,10 +454,10 @@ def render_long_dashboard(selected_ticker: str) -> None:
                 increasing_fillcolor="rgba(46,204,113,0.75)",
                 decreasing_line_color="#E74C3C",
                 decreasing_fillcolor="rgba(231,76,60,0.75)",
-                name="Price", whiskerwidth=0.5
+                name="Fiyat", whiskerwidth=0.5
             ))
 
-            # Moving averages
+            # Hareketli ortalamalar
             fig.add_trace(go.Scatter(
                 x=hist["datetime"], y=hist["ema20"],
                 line=dict(color="rgba(255,176,0,0.8)", width=1.2, dash="dot"),
@@ -469,7 +474,7 @@ def render_long_dashboard(selected_ticker: str) -> None:
                 name="SMA200"
             ))
 
-            # Volume bars
+            # Hacim çubukları
             vol_colors = [
                 "rgba(46,204,113,0.18)" if c >= o else "rgba(231,76,60,0.18)"
                 for c, o in zip(hist["close"], hist["open"])
@@ -477,7 +482,7 @@ def render_long_dashboard(selected_ticker: str) -> None:
             fig.add_trace(go.Bar(
                 x=hist["datetime"], y=hist["volume"],
                 yaxis="y2", marker_color=vol_colors,
-                name="Volume", showlegend=False
+                name="Hacim", showlegend=False
             ))
 
             fig.update_layout(
@@ -507,7 +512,7 @@ def render_long_dashboard(selected_ticker: str) -> None:
                 ),
             )
 
-            # Amber top accent
+            # Altın rengi üst aksan çizgisi
             fig.add_shape(
                 type="line", xref="paper", yref="paper",
                 x0=0, y0=1, x1=0.15, y1=1,

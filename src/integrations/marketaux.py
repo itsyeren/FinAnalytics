@@ -12,7 +12,7 @@ CACHE_PATH = Path(os.getenv("MARKETAUX_ENTITY_CACHE", ".cache/marketaux_entity_c
 def _token() -> str:
     t = os.getenv("MARKETAUX_API_TOKEN", "").strip()
     if not t:
-        raise RuntimeError("MARKETAUX_API_TOKEN yok. .env veya environment variable set et.")
+        raise RuntimeError("MARKETAUX_API_TOKEN bulunamadı. .env dosyasına ekleyin.")
     return t
 
 
@@ -46,7 +46,7 @@ def _get(path: str, params: Dict[str, Any]) -> Dict[str, Any]:
     if r.status_code == 401:
         raise RuntimeError("Marketaux 401: API token geçersiz veya süresi dolmuş.")
     if r.status_code == 429:
-        raise RuntimeError("Marketaux 429: API kota aşıldı. Bir süre bekleyin.")
+        raise RuntimeError("Marketaux 429: API kotası aşıldı. Bir süre bekleyin.")
     if r.status_code != 200:
         raise RuntimeError(f"Marketaux HTTP {r.status_code}: {r.text[:200]}")
     return r.json()
@@ -119,9 +119,9 @@ def resolve_entity(
     company_name: Optional[str] = None,
     prefer_country: str = "us",
 ) -> Dict[str, Any]:
-    """Entity'yi önce cache'ten, yoksa Marketaux'tan çözer.
-    Fallback sırası: symbol/country → symbol (global) → name/country → name (global).
-    Her adımda bulunca hemen döner ve cache'e yazar — gereksiz API çağrısı önler.
+    """Entity'yi önce önbellekten, yoksa Marketaux'tan çözer.
+    Geri dönüş sırası: symbol/country → symbol (global) → name/country → name (global).
+    Her adımda bulunca hemen döner ve önbelleğe yazar — gereksiz API çağrısı önler.
     """
     cache = _load_cache()
     entities = cache.get("entities", {})
@@ -217,7 +217,7 @@ def get_last_n_news(params_key: str, params_val: str, n: int = 10, per_req: int 
             if len(collected) >= n:
                 break
 
-        # Sayfa dönen eleman sayısı istenen limit'ten azsa daha fazla sayfa yok
+        # Dönen eleman sayısı istenen limit'ten azsa daha fazla sayfa yok
         if len(items) < per_req:
             break
 

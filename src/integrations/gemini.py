@@ -14,12 +14,12 @@ _MAX_TOKENS = 8192
 
 @st.cache_resource(show_spinner=False)
 def get_client() -> genai.Client:
-    """Gemini API client'ını oluşturur ve cache'ler (uygulama ömrü boyunca)."""
+    """Gemini API istemcisini oluşturur ve önbellekler (uygulama ömrü boyunca)."""
     api_key = os.getenv("GEMINI_API_KEY", "").strip()
     if not api_key:
         raise RuntimeError(
             "GEMINI_API_KEY bulunamadı. "
-            "`set -a && source .env && set +a` ile .env'ı yükle."
+            "`set -a && source .env && set +a` komutuyla .env dosyasını yükleyin."
         )
     return genai.Client(api_key=api_key)
 
@@ -79,12 +79,11 @@ def generate_text(
     if not text:
         candidates = getattr(resp, "candidates", None) or []
         if candidates:
-            # Candidate bir nesne; finish_reason attribute olarak erişilir
-            finish_reason = str(getattr(candidates[0], "finish_reason", "UNKNOWN"))
+            finish_reason = str(getattr(candidates[0], "finish_reason", "BİLİNMİYOR"))
         else:
-            finish_reason = "UNKNOWN"
+            finish_reason = "BİLİNMİYOR"
         raise RuntimeError(
-            f"Gemini boş yanıt döndürdü (finish_reason={finish_reason}). "
+            f"Gemini boş yanıt döndürdü (bitiş nedeni={finish_reason}). "
             "İçerik filtresi devreye girmiş olabilir."
         )
 
