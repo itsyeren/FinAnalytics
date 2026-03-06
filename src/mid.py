@@ -363,7 +363,7 @@ def render_mid_dashboard(selected_ticker: str) -> None:
             ),
             hovermode="x unified",
         )
-        st.plotly_chart(fig, width='stretch')
+        st.plotly_chart(fig, use_container_width=True)
 
     else:
         if not _HAS_ALPACA:
@@ -391,45 +391,3 @@ def render_mid_dashboard(selected_ticker: str) -> None:
                 unsafe_allow_html=True,
             )
     st.caption("⚠️ Model tahminleri eğitim/araştırma amaçlıdır. Yatırım tavsiyesi değildir.")
-
-
-def create_mid_figure(ticker: str) -> go.Figure | None:
-    """PDF raporu için orta vadeli tahmin grafiğini oluşturur."""
-    report = _load_json_report()
-    if not report: return None
-    pred, _ = _get_stock_prediction(report, ticker)
-    if not pred: return None
-
-    df_hist = _fetch_stock_history(ticker, days_back=365)
-    if df_hist.empty: return None
-
-    df_hist = df_hist.sort_values("timestamp")
-    last_date = df_hist["timestamp"].iloc[-1]
-    last_price = float(df_hist["close"].iloc[-1])
-    date_1m = last_date + timedelta(days=30)
-    date_3m = last_date + timedelta(days=90)
-
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(
-        x=df_hist["timestamp"], y=df_hist["close"],
-        mode="lines", name=f"{ticker} Fiyat",
-        line=dict(color="#63b3ed", width=2)
-    ))
-    fig.add_trace(go.Scatter(
-        x=[last_date, date_1m], y=[last_price, pred["tahmin_1ay"]],
-        mode="lines+markers", name="1 Ay Tahmin",
-        line=dict(color="#64ffda", width=2, dash="dot")
-    ))
-    fig.add_trace(go.Scatter(
-        x=[last_date, date_3m], y=[last_price, pred["tahmin_3ay"]],
-        mode="lines+markers", name="3 Ay Tahmin",
-        line=dict(color="#c084fc", width=2, dash="dot")
-    ))
-
-    fig.update_layout(
-        paper_bgcolor="#ffffff", plot_bgcolor="#ffffff",
-        font=dict(color="#333333"), height=400,
-        margin=dict(l=10, r=10, t=30, b=10),
-        showlegend=True
-    )
-    return fig

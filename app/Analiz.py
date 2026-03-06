@@ -21,10 +21,9 @@ from src.integrations.marketaux import get_ticker_and_industry_news
 from src.rag.turkish_finance_sft_rag import retrieve_examples
 from src.reports.news_prompt import build_llm_context
 from src.reports.pdf_builder import build_financial_pdf, build_agenda_pdf
-from src.short import render_short_dashboard, create_short_figure
-from src.mid import render_mid_dashboard, create_mid_figure
-from src.long import render_long_dashboard, create_long_figure
-
+from src.short import render_short_dashboard
+from src.mid import render_mid_dashboard
+from src.long import render_long_dashboard
 
 TICKERS = {
     "Apple": "AAPL",
@@ -1219,31 +1218,12 @@ with tabs[6]:
                 except Exception:
                     long_data = None
 
-                # ── Grafiklerin Hazırlanması (PNG olarak captura et)
-                chart_bytes = {}
-                try:
-                    with st.spinner("Grafikler hazirlaniyor..."):
-                        # Kısa Vade
-                        fig_s = create_short_figure(selected_ticker)
-                        if fig_s: chart_bytes["short"] = fig_s.to_image(format="png", width=800, height=450)
-                        
-                        # Orta Vade
-                        fig_m = create_mid_figure(selected_ticker)
-                        if fig_m: chart_bytes["mid"] = fig_m.to_image(format="png", width=800, height=400)
-                        
-                        # Uzun Vade
-                        fig_l = create_long_figure(selected_ticker)
-                        if fig_l: chart_bytes["long"] = fig_l.to_image(format="png", width=800, height=400)
-                except Exception as ce:
-                    st.warning(f"Grafik olusturma hatasi: {ce}")
-
                 pdf_bytes = build_financial_pdf(
                     ticker=selected_ticker,
                     label=selected_label,
                     short_data=short_data,
                     mid_data=mid_data,
                     long_data=long_data,
-                    chart_bytes=chart_bytes if chart_bytes else None
                 )
 
             fname = f"finansal_rapor_{selected_ticker}_{pd.Timestamp.now().strftime('%Y%m%d_%H%M')}.pdf"

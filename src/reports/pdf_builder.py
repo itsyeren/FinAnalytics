@@ -156,13 +156,14 @@ class _PDF(FPDF):
         if sentiment > 0.3: s_color = (46, 204, 113) # Pozitif (Green)
         elif sentiment < -0.3: s_color = (231, 76, 60) # Negatif (Red)
         
-        # Başlık hücresi (boşluk bırakarak başla)
-        self.cell(0, 5, _truncate(f"      {title}", 95), ln=True, fill=True)
+        # Başlık hücresi (boşluk bırakarak başla - 8 boşluk)
+        self.cell(0, 5, _truncate(f"        {title}", 95), ln=True, fill=True)
         
-        # Duygu dairesini başlığın üzerine çiz
-        curr_y = self.get_y() - 3.5
+        # Duygu dairesini başlığın üzerine çiz 
+        # Index box X=12, W=8 (Ends at 20). Dot X=22.
+        curr_y = self.get_y() - 2.5 # Dikey merkez (H=5 olduğu için 2.5 orta nokta)
         self.set_fill_color(*s_color)
-        self.circle(23, curr_y, 1.2, style="F")
+        self.circle(22, curr_y, 1.3, style="F")
 
         # Meta: kaynak · tarih
         meta = "  " + "  .  ".join(p for p in [source, published_at] if p)
@@ -229,7 +230,6 @@ def build_financial_pdf(
     short_data: Optional[ShortData] = None,
     mid_data: Optional[MidData] = None,
     long_data: Optional[LongData] = None,
-    chart_bytes: Optional[dict[str, bytes]] = None
 ) -> bytes:
     """
     Kısa / Orta / Uzun vadeli model çıktılarını PDF'e yazar.
@@ -281,11 +281,6 @@ def build_financial_pdf(
                 pdf.cell(30, 5.5, f"%{r.get('prob_up', 0)*100:.1f}", fill=shade, align="C")
                 pdf.ln()
         
-        # Grafik Ekle (Kısa Vade)
-        if chart_bytes and "short" in chart_bytes:
-            pdf.image(io.BytesIO(chart_bytes["short"]), x=12, w=186)
-            pdf.ln(5)
-            
         pdf.ln(3)
     else:
         pdf.body_text("Kisa vadeli model verisi mevcut degil.")
@@ -305,11 +300,6 @@ def build_financial_pdf(
         ]
         for i, (k, v) in enumerate(rows_mid):
             pdf.kv_row(k, v, shade=(i % 2 == 0))
-            
-        # Grafik Ekle (Orta Vade)
-        if chart_bytes and "mid" in chart_bytes:
-            pdf.image(io.BytesIO(chart_bytes["mid"]), x=12, w=186)
-            pdf.ln(5)
     else:
         pdf.body_text("Orta vadeli model verisi mevcut degil.")
     pdf.ln(3)
@@ -333,11 +323,6 @@ def build_financial_pdf(
         ]
         for i, (k, v) in enumerate(rows_long):
             pdf.kv_row(k, v, shade=(i % 2 == 0))
-            
-        # Grafik Ekle (Uzun Vade)
-        if chart_bytes and "long" in chart_bytes:
-            pdf.image(io.BytesIO(chart_bytes["long"]), x=12, w=186)
-            pdf.ln(5)
     else:
         pdf.body_text("Uzun vadeli model verisi mevcut degil.")
 

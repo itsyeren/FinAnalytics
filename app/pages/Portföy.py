@@ -650,7 +650,7 @@ fig_proj.update_layout(
     showlegend=False,
     hovermode="x unified",
 )
-st.plotly_chart(fig_proj, width='stretch')
+st.plotly_chart(fig_proj, use_container_width=True)
 
 # ── 3 Aşamalı Büyüme Kartları (tam genişlik) ───────────────────────────────
 st.markdown(
@@ -739,7 +739,7 @@ with pc_left:
         legend=dict(orientation="h", y=-0.12, font=dict(size=10)),
     )
     _fig_pie_cur.update_traces(textposition="inside", textinfo="percent+label")
-    st.plotly_chart(_fig_pie_cur, width="stretch")
+    st.plotly_chart(_fig_pie_cur, use_container_width=True)
 
 with pc_right:
     labels_hedef = [x["ticker"] for x in _hedef_values]
@@ -761,7 +761,7 @@ with pc_right:
         legend=dict(orientation="h", y=-0.12, font=dict(size=10)),
     )
     _fig_pie_hedef.update_traces(textposition="inside", textinfo="percent+label")
-    st.plotly_chart(_fig_pie_hedef, width="stretch")
+    st.plotly_chart(_fig_pie_hedef, use_container_width=True)
 
 st.markdown("<br>", unsafe_allow_html=True)
 
@@ -907,7 +907,7 @@ for t in tickers_in_portfolio:
                 font=dict(family="Space Mono", color="#8B93A5"),
                 showlegend=False,
             )
-            st.plotly_chart(fig, width='stretch')
+            st.plotly_chart(fig, use_container_width=True)
 
         # Horizon tahminleri
         horizons = res.get("horizons", {})

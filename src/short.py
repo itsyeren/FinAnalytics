@@ -93,39 +93,58 @@ def _rgba(hex6: str, a: float) -> str:
 # ─────────────────────────────────────────────
 @st.cache_data(ttl=300, show_spinner=False)
 def _fetch_live(ticker: str) -> pd.DataFrame | None:
-    """yfinance — son 3 ay (tahmin için yeterli geçmiş lazım)"""
+    """yfinance — son 3-6 ay (tahmin için yeterli geçmiş lazım)"""
     try:
         sym = to_yf_symbol(ticker)
-        df = yf.download(sym, period="3mo", interval="1d",
+        df = yf.download(sym, period="6mo", interval="1d",
                          progress=False, auto_adjust=True)
         if df.empty:
             return None
+        
+        # Sütunları düzleştir (MultiIndex sorunu için)
         if isinstance(df.columns, pd.MultiIndex):
-            df.columns = df.columns.get_level_values(0)
+            # level name 'Price' veya 'Attribute' olanı bulmaya çalış veya 'Close' olan level'ı al
+            for level in range(df.columns.nlevels):
+                if "Close" in df.columns.get_level_values(level):
+                    df.columns = df.columns.get_level_values(level)
+                    break
+
         df.index = pd.to_datetime(df.index)
         df.index.name = "Date"
-        return df[["Open", "High", "Low", "Close", "Volume"]].dropna()
+        cols = ["Open", "High", "Low", "Close", "Volume"]
+        # Eksik sütunları 0 ile doldur veya sadece olanları al
+        available = [c for c in cols if c in df.columns]
+        if "Close" not in available: return None
+        
+        return df[available].apply(pd.to_numeric, errors="coerce").dropna()
     except Exception:
         return None
 
 
 @st.cache_data(ttl=86400, show_spinner=False)
 def _fetch_yf_history(ticker: str) -> pd.DataFrame | None:
-    """yfinance — son 2 yıl günlük veri (özellik hesabı için).
-    TTL=86400 → günlük önbellek, yerel dosyaya gerek yok."""
+    """yfinance — son 2 yıl günlük veri (özellik hesabı için)."""
     try:
         sym = to_yf_symbol(ticker)
         df = yf.download(sym, period="2y", interval="1d",
                          progress=False, auto_adjust=True)
         if df.empty:
             return None
+        
         if isinstance(df.columns, pd.MultiIndex):
-            df.columns = df.columns.get_level_values(0)
+            for level in range(df.columns.nlevels):
+                if "Close" in df.columns.get_level_values(level):
+                    df.columns = df.columns.get_level_values(level)
+                    break
+                    
         df.index = pd.to_datetime(df.index)
         df.index.name = "Date"
         cols = ["Open", "High", "Low", "Close", "Volume"]
-        df = df[cols].apply(pd.to_numeric, errors="coerce").dropna()
-        df = df[(df["Close"] > 0) & (df["Volume"] > 0)]
+        available = [c for c in cols if c in df.columns]
+        if "Close" not in available: return None
+        
+        df = df[available].apply(pd.to_numeric, errors="coerce").dropna()
+        df = df[(df["Close"] > 0)]
         return df if len(df) >= 200 else None
     except Exception:
         return None
@@ -428,7 +447,7 @@ def render_short_dashboard(selected_ticker: str) -> None:
                      tickprefix="$", tickfont=dict(size=10))
     fig.update_xaxes(gridcolor="#0c1018", row=2, col=1)
 
-    st.plotly_chart(fig, width='stretch')
+    st.plotly_chart(fig, use_container_width=True)
 
     # ── Olasılık çubukları
     st.markdown("<div class='sec-title'>Ufuk Bazlı Güven Skoru</div>",
@@ -472,60 +491,4 @@ def render_short_dashboard(selected_ticker: str) -> None:
                        ticksuffix="%", tickfont=dict(size=10)),
             xaxis=dict(gridcolor="#0c1018"), bargap=0.25,
         )
-        st.plotly_chart(f2, width='stretch')
-
-
-def create_short_figure(ticker: str) -> go.Figure | None:
-    """PDF raporu için kısa vadeli tahmin grafiğini (go.Figure) oluşturur."""
-    raw_df = _fetch_yf_history(ticker)
-    if raw_df is None or raw_df.empty:
-        return None
-    
-    live_df = _fetch_live(ticker)
-    if live_df is None or live_df.empty:
-        return None
-    
-    preds = _run_prediction(ticker)
-    chart_df = live_df.tail(22).copy()
-    ref_price = float(live_df["Close"].iloc[-1])
-    last_date = chart_df.index[-1]
-
-    fig = make_subplots(rows=2, cols=1, row_heights=[0.78, 0.22],
-                        shared_xaxes=True, vertical_spacing=0.03)
-
-    # Mum grafiği
-    fig.add_trace(go.Candlestick(
-        x=chart_df.index,
-        open=chart_df["Open"], high=chart_df["High"],
-        low=chart_df["Low"], close=chart_df["Close"],
-        name="Fiyat",
-        increasing_line_color=UP_C, decreasing_line_color=DOWN_C,
-        increasing_fillcolor=_rgba(UP_C, 0.2),
-        decreasing_fillcolor=_rgba(DOWN_C, 0.2),
-    ), row=1, col=1)
-
-    # Tahmin okları
-    if preds:
-        COLORS = {"1d": UP_C, "3d": "#34d9a5", "5d": "#f0c040", "7d": "#a78bfa"}
-        offsets = {"1d": 1, "3d": 3, "5d": 5, "7d": 7}
-        for hk in ["1d", "3d", "5d", "7d"]:
-            if hk not in preds: continue
-            p = preds[hk]
-            col = COLORS[hk]
-            dire = 1 if p["signal"] == "YÜKSELİŞ" else -1
-            conf = p["confidence"]
-            target_x = last_date + pd.tseries.offsets.BDay(offsets[hk])
-            target_y = ref_price * (1 + dire * conf * 0.03)
-            fig.add_annotation(
-                x=target_x, y=target_y, ax=last_date, ay=ref_price,
-                xref="x", yref="y", axref="x", ayref="y",
-                arrowhead=3, arrowwidth=2.5, arrowcolor=col, showarrow=True
-            )
-
-    fig.update_layout(
-        paper_bgcolor="#ffffff", plot_bgcolor="#ffffff",
-        font=dict(color="#333333"), xaxis_rangeslider_visible=False,
-        height=400, margin=dict(l=10, r=10, t=30, b=10),
-        showlegend=True
-    )
-    return fig
+        st.plotly_chart(f2, use_container_width=True)
