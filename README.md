@@ -50,7 +50,7 @@ FinAnalytics/
 │   ├── news_cache/               # Günlük haber önbelleği (JSON)
 │   └── outputs/                  # Model eğitim çıktıları, grafikler, raporlar
 │
-├── archive/                      # Devre dışı / eski deneysel dosyalar
+├── research/                     # Ar-Ge, backtest ve validasyon scriptleri
 ├── pyproject.toml                # Bağımlılıklar (Poetry)
 └── README.md
 ```
@@ -136,7 +136,7 @@ Marketaux API üzerinden seçili hisse ve sektörüne ait güncel haberler. Gün
 **Retrieval-Augmented Generation (RAG)** mimarisi:
 1. Kullanıcı sorusu → semantik benzerlik arama (Turkish Finance SFT Dataset)
 2. En yakın örnekler bağlam olarak Gemini'ye iletilir
-3. Gemini 2.5 Flash Lite → Türkçe yanıt üretir
+3. Gemini 2.0 Flash Lite → Türkçe yanıt üretir
 
 ### 📄 Raporlar
 Kısa/orta/uzun vadeli model sinyallerini içeren **Finansal Rapor** ve haber özetlerini içeren **Gündem Raporu**'nu PDF olarak indirir.
