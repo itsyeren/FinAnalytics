@@ -527,3 +527,30 @@ def render_long_dashboard(selected_ticker: str) -> None:
             st.warning(f"{sel_ticker} için geçmiş fiyat verisi bulunamadı.")
     else:
         st.warning("Fiyat verisi yüklenemedi.")
+
+
+def create_long_figure(ticker: str) -> go.Figure | None:
+    """PDF raporu için uzun vadeli tahmin grafiğini oluşturur."""
+    results, history_df, error = _load_data_and_predict()
+    if results is None or history_df is None: return None
+    
+    hist = history_df[history_df["ticker"] == ticker].tail(90).copy()
+    if hist.empty: return None
+
+    fig = go.Figure()
+    fig.add_trace(go.Candlestick(
+        x=hist["datetime"],
+        open=hist["open"], high=hist["high"],
+        low=hist["low"], close=hist["close"],
+        increasing_line_color="#2ECC71", increasing_fillcolor="rgba(46,204,113,0.75)",
+        decreasing_line_color="#E74C3C", decreasing_fillcolor="rgba(231,76,60,0.75)",
+        name="Fiyat", whiskerwidth=0.5
+    ))
+    
+    fig.update_layout(
+        paper_bgcolor="#ffffff", plot_bgcolor="#ffffff",
+        font=dict(color="#333333"), xaxis_rangeslider_visible=False,
+        height=400, margin=dict(l=10, r=10, t=30, b=10),
+        showlegend=True
+    )
+    return fig

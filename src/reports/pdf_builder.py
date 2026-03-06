@@ -152,12 +152,17 @@ class _PDF(FPDF):
         self.set_font(self._font_family, "B", 9)
         
         # Duygu rengi belirle
-        s_icon = "⚪"
-        if sentiment > 0.3: s_icon = "🟢"
-        elif sentiment < -0.3: s_icon = "🔴"
+        s_color = (139, 147, 165) # Neutral (Gray)
+        if sentiment > 0.3: s_color = (46, 204, 113) # Pozitif (Green)
+        elif sentiment < -0.3: s_color = (231, 76, 60) # Negatif (Red)
         
-        display_title = f"{s_icon} {title}"
-        self.cell(0, 5, _truncate(display_title, 95), ln=True, fill=True)
+        # Başlık hücresi (boşluk bırakarak başla)
+        self.cell(0, 5, _truncate(f"      {title}", 95), ln=True, fill=True)
+        
+        # Duygu dairesini başlığın üzerine çiz
+        curr_y = self.get_y() - 3.5
+        self.set_fill_color(*s_color)
+        self.circle(23, curr_y, 1.2, style="F")
 
         # Meta: kaynak · tarih
         meta = "  " + "  .  ".join(p for p in [source, published_at] if p)
@@ -373,8 +378,12 @@ def build_agenda_pdf(
             source  = it.get("source") or ""
             pub_at  = _fmt_dt((it.get("published_at") or "").strip())
             desc    = it.get("description") or it.get("snippet") or ""
-            # Duygu analizi skoru (eğer varsa)
-            sentiment = float(it.get("entities", [{}])[0].get("sentiment_score", 0.0)) if it.get("entities") else 0.0
+            # Duygu analizi skoru (farklı alanlardan dene)
+            sentiment = 0.0
+            if it.get("sentiment_score"):
+                sentiment = float(it["sentiment_score"])
+            elif it.get("entities"):
+                sentiment = float(it["entities"][0].get("sentiment_score", 0.0))
             
             summary = desc[:500] + ("..." if len(desc) > 500 else "")
             pdf.news_card(i, title, source, pub_at, summary, sentiment=sentiment)
@@ -392,8 +401,12 @@ def build_agenda_pdf(
             source  = it.get("source") or ""
             pub_at  = _fmt_dt((it.get("published_at") or "").strip())
             desc    = it.get("description") or it.get("snippet") or ""
-            # Duygu analizi skoru (eğer varsa)
-            sentiment = float(it.get("entities", [{}])[0].get("sentiment_score", 0.0)) if it.get("entities") else 0.0
+            # Duygu analizi skoru (farklı alanlardan dene)
+            sentiment = 0.0
+            if it.get("sentiment_score"):
+                sentiment = float(it["sentiment_score"])
+            elif it.get("entities"):
+                sentiment = float(it["entities"][0].get("sentiment_score", 0.0))
 
             summary = desc[:500] + ("..." if len(desc) > 500 else "")
             pdf.news_card(i, title, source, pub_at, summary, sentiment=sentiment)
