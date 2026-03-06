@@ -197,7 +197,10 @@ def _load_data_and_predict():
         return None, None, "src.config veya src.features import edilemedi"
 
     if not _MODEL_PATH.exists():
-        return None, None, "Model dosyası bulunamadı"
+        return None, None, (
+            "Model dosyası bulunamadı: models/long_term/long_model.pkl\n"
+            "Eğitim için: python src/model_long.py"
+        )
 
     payload = joblib.load(_MODEL_PATH)
     model = payload["model"]
@@ -262,7 +265,7 @@ def _load_data_and_predict():
 # ANA RENDER FONKSİYONU
 # =========================================================
 def render_long_dashboard(selected_ticker: str) -> None:
-    """Analysis.py'den çağrılır. Uzun vadeli model sonuçlarını gösterir."""
+    """Analiz.py'den çağrılır. Uzun vadeli model sonuçlarını gösterir."""
 
     st.markdown(_LONG_CSS, unsafe_allow_html=True)
 

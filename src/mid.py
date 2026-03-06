@@ -209,7 +209,10 @@ def render_mid_dashboard(selected_ticker: str) -> None:
 
     report = _load_json_report()
     if report is None:
-        st.error("sector_optimized_params.json bulunamadı!")
+        st.error(
+            "sector_optimized_params.json bulunamadı! "
+            "Raporu oluşturmak için: `python models/mid_term/src/train.py` çalıştırın."
+        )
         return
 
     # Rapordaki tüm hisseleri topla

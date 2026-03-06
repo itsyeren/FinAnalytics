@@ -207,14 +207,14 @@ DOWN_C = "#ff4455"
 
 
 def render_short_dashboard(selected_ticker: str) -> None:
-    """Analysis.py'den çağrılır. Seçilen hissenin kısa vadeli modelini gösterir."""
+    """Analiz.py'den çağrılır. Seçilen hissenin kısa vadeli modelini gösterir."""
 
     st.markdown(_SHORT_CSS, unsafe_allow_html=True)
 
     cname = TICKER_TO_NAME.get(selected_ticker, selected_ticker)
 
     # ── Model / veri durumu
-    model_dir = _PROJECT_ROOT / "models" / selected_ticker
+    model_dir = _PROJECT_ROOT / "models" / "short_term" / selected_ticker
     model_ok = model_dir.exists() and any(model_dir.glob("*.pkl"))
 
     if model_ok:
@@ -223,7 +223,8 @@ def render_short_dashboard(selected_ticker: str) -> None:
     else:
         st.warning(
             f"⚠ {selected_ticker} için eğitilmiş model bulunamadı.\n\n"
-            f"```\npoetry run python train.py --ticker {selected_ticker}\n```"
+            f"Eğitim için:\n"
+            f"```\npython models/short_term/src/train.py --ticker {selected_ticker}\n```"
         )
 
     # ── Canlı fiyat başlığı

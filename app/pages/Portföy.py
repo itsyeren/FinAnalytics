@@ -927,7 +927,10 @@ for t in tickers_in_portfolio:
                     </div>
                     """, unsafe_allow_html=True)
         else:
-            st.info("Short model bulunamadı.")
+            st.info(
+                f"**{t}** için kısa vadeli model dosyaları bulunamadı. "
+                f"Eğitim için: `python models/short_term/src/train.py --ticker {t}`"
+            )
 
 
 # =========================================================
@@ -939,7 +942,7 @@ st.caption("Veri: Alpaca API | Model: RandomForest + LightGBM Regressor | Fiyat 
 report = load_sector_json()
 
 if report is None:
-    st.warning("sector_optimized_params.json bulunamadı. `models/orta_vadeli/kaynak/train.py` dosyasını çalıştırarak raporu oluşturun.")
+    st.warning("sector_optimized_params.json bulunamadı. `models/mid_term/src/train.py` dosyasını çalıştırarak raporu oluşturun.")
 else:
     mid_predictions = {}
     for t in tickers_in_portfolio:
