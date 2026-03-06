@@ -5,7 +5,7 @@ import streamlit as st
 from google import genai
 from google.genai import types
 
-DEFAULT_MODEL = "gemini-2.5-flash-lite"
+DEFAULT_MODEL = "gemini-2.0-flash-lite"
 
 # Güvenli token aralıkları
 _MIN_TOKENS = 64

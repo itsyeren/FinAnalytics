@@ -952,7 +952,7 @@ Bu sekme, Retrieval-Augmented Generation (RAG) akışında semantik retrieval ka
             with col_info:
                 st.markdown(
                     f"<div style='font-size:11px; color: grey; padding-top:6px;'>"
-                    f"🔵 {selected_label}<br>⚡ gemini-2.5-flash-lite</div>",
+                    f"🔵 {selected_label}<br>⚡ gemini-2.0-flash-lite</div>",
                     unsafe_allow_html=True,
                 )
 
