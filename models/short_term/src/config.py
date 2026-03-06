@@ -3,10 +3,12 @@ config.py — Consumer Staples Short Model
 """
 from pathlib import Path
 
-# ── Klasörler
-DATA_DIR    = Path.home() / "Downloads" / "archive" / "D1"
-MODELS_DIR  = Path("models")
-MODELS_DIR.mkdir(exist_ok=True)
+# ── Klasörler (Proje kök dizinine göreceli)
+_THIS_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = _THIS_DIR.parents[2]  # models/short_term/src -> models/short_term -> models -> root
+
+DATA_DIR    = PROJECT_ROOT / "data" / "raw" / "D1"
+MODELS_DIR  = PROJECT_ROOT / "models" / "short_term"
 
 # ── Minimum satır sayısı (yeterli veri kontrolü)
 MIN_ROWS = 200
