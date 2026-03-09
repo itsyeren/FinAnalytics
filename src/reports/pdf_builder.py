@@ -8,7 +8,10 @@ Bağımlılık: fpdf2  (poetry add fpdf2)
 from __future__ import annotations
 
 import io
+import os
+import re
 from datetime import datetime
+from pathlib import Path
 from typing import Any, TypedDict, List, Optional
 
 from fpdf import FPDF
@@ -59,8 +62,30 @@ class LongData(TypedDict):
 
 
 # ═══════════════════════════════════════════════════════════════════
+# DejaVu fontlarını aranacak olası dizinler
+_DEJAVU_SEARCH_DIRS = [
+    "/usr/share/fonts/truetype/dejavu",
+    "/usr/share/fonts/dejavu",
+    "/usr/share/fonts/TTF",
+    "/usr/share/fonts",
+    str(Path(__file__).resolve().parent / "fonts"),  # proje içi fallback
+]
+
+
+def _find_dejavu() -> tuple[str, str] | None:
+    """DejaVuSans.ttf ve Bold varyantını ilk bulunan dizinden döndürür."""
+    for d in _DEJAVU_SEARCH_DIRS:
+        regular = os.path.join(d, "DejaVuSans.ttf")
+        bold = os.path.join(d, "DejaVuSans-Bold.ttf")
+        if os.path.isfile(regular) and os.path.isfile(bold):
+            return regular, bold
+    return None
+
+
 class _PDF(FPDF):
     """Tüm raporlar için ortak baz sınıf."""
+
+    _use_unicode_font: bool = False
 
     def __init__(self, title: str, ticker: str, label: str) -> None:
         super().__init__()
@@ -69,12 +94,17 @@ class _PDF(FPDF):
         self._label  = label
         
         # Türkçe Karakter Desteği için Font Yükle
-        try:
-            self.add_font("DejaVu", "", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf")
-            self.add_font("DejaVu", "B", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf")
-            self._font_family = "DejaVu"
-        except:
-            self._font_family = "Helvetica" # Fallback
+        fonts = _find_dejavu()
+        if fonts:
+            try:
+                self.add_font("DejaVu", "", fonts[0])
+                self.add_font("DejaVu", "B", fonts[1])
+                self._font_family = "DejaVu"
+                self._use_unicode_font = True
+            except Exception:
+                self._font_family = "Helvetica"
+        else:
+            self._font_family = "Helvetica"
 
         self.set_auto_page_break(auto=True, margin=18)
         self.add_page()
@@ -201,10 +231,44 @@ def _truncate(text: str, max_chars: int) -> str:
     return text if len(text) <= max_chars else text[:max_chars - 1] + "..."
 
 
-def _safe(text: Any) -> str:
-    """UTF-8 desteği sayesinde artık sadece temizlik yapar, karakter bozmaz."""
-    if text is None: return ""
-    return str(text).strip()
+# Emoji ve özel Unicode karakterleri ASCII-güvenli metne dönüştür
+_EMOJI_MAP = {
+    "🟢": "(+)", "🔴": "(-)", "🟡": "(~)",
+    "⬆": "UP", "⬇": "DN", "➡": "->",
+    "📈": "", "📉": "", "📊": "", "🏢": "",
+    "📰": "", "🤖": "", "📄": "", "🛡️": "",
+}
+_EMOJI_RE = re.compile(
+    "["
+    "\U0001F600-\U0001F64F"  # emoticons
+    "\U0001F300-\U0001F5FF"  # symbols & pictographs
+    "\U0001F680-\U0001F6FF"  # transport & map
+    "\U0001F1E0-\U0001F1FF"  # flags
+    "\U00002700-\U000027BF"  # dingbats
+    "\U0000FE00-\U0000FE0F"  # variation selectors
+    "\U0001F900-\U0001F9FF"  # supplemental
+    "\U0001FA00-\U0001FA6F"  # chess symbols
+    "\U0001FA70-\U0001FAFF"  # symbols extended
+    "\U00002702-\U000027B0"  # dingbats
+    "]+", flags=re.UNICODE,
+)
+
+
+def _strip_emoji(text: str) -> str:
+    """Bilinen emojileri eşleştirmeyle, kalanları regex ile temizler."""
+    for emoji, repl in _EMOJI_MAP.items():
+        text = text.replace(emoji, repl)
+    return _EMOJI_RE.sub("", text).strip()
+
+
+def _safe(text: Any, force_ascii: bool = False) -> str:
+    """Metni PDF-güvenli hâle getirir. Unicode font yoksa emojileri siler."""
+    if text is None:
+        return ""
+    s = str(text).strip()
+    if force_ascii:
+        s = _strip_emoji(s)
+    return s
 
 
 def _fmt_dt(raw: str) -> str:
@@ -273,9 +337,10 @@ def build_financial_pdf(
                 if shade:
                     pdf.set_fill_color(*_LIGHT)
                 pdf.set_font(pdf._font_family, "", 9)
+                _ascii = not pdf._use_unicode_font
                 pdf.set_x(12)
-                pdf.cell(30, 5.5, r.get("horizon", "—"), fill=shade, align="C")
-                sig   = r.get("signal", "—")
+                pdf.cell(30, 5.5, _safe(r.get("horizon", "—"), force_ascii=_ascii), fill=shade, align="C")
+                sig = _safe(r.get("signal", "—"), force_ascii=_ascii)
                 pdf.cell(26, 5.5, sig, fill=shade, align="C")
                 pdf.cell(30, 5.5, f"%{r.get('confidence', 0)*100:.1f}", fill=shade, align="C")
                 pdf.cell(30, 5.5, f"%{r.get('prob_up', 0)*100:.1f}", fill=shade, align="C")
