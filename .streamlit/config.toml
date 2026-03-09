@@ -1,0 +1,6 @@
+# Streamlit uygulama yapılandırması
+[server]
+headless = true
+
+[theme]
+base = "dark"

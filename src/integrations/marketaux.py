@@ -4,15 +4,22 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import requests
+import streamlit as st
 
 BASE = "https://api.marketaux.com/v1"
 CACHE_PATH = Path(os.getenv("MARKETAUX_ENTITY_CACHE", ".cache/marketaux_entity_cache.json"))
 
 
 def _token() -> str:
-    t = os.getenv("MARKETAUX_API_TOKEN", "").strip()
+    # Streamlit Cloud secrets, sonra ortam değişkeni
+    t = st.secrets.get("MARKETAUX_API_TOKEN", "") or os.getenv("MARKETAUX_API_TOKEN", "")
+    t = (t or "").strip()
     if not t:
-        raise RuntimeError("MARKETAUX_API_TOKEN bulunamadı. .env dosyasına ekleyin.")
+        raise RuntimeError(
+            "MARKETAUX_API_TOKEN bulunamadı. "
+            "Streamlit Cloud: App Settings → Secrets bölümüne ekleyin. "
+            "Lokal: .env dosyasına ekleyin."
+        )
     return t
 
 
