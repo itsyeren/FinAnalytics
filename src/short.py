@@ -1,6 +1,8 @@
 """
-app/pages/short.py — Consumer Staples Short Model Dashboard
-Home.py'den uyarlandı: render_short_dashboard(ticker) fonksiyonu olarak.
+src/short.py — Kısa Vadeli Model Dashboard
+============================================
+Seçilen hisse için kısa vadeli tahmin dashboard'unu render eder.
+Analysis.py'den render_short_dashboard(ticker) olarak çağrılır.
 """
 import warnings
 import pickle
@@ -17,16 +19,21 @@ import yfinance as yf
 
 warnings.filterwarnings("ignore")
 
-# Proje kökünü sys.path'e ekle (config ve features import'ları için)
-_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+# Proje kökünü sys.path'e ekle
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
-from config import TICKERS, TICKER_TO_NAME, DATA_DIR, HORIZONS, to_yf_symbol
+# Kısa vadeli model kaynak modüllerini path'e ekle
+_SHORT_MODEL_DIR = _PROJECT_ROOT / "models" / "short_term" / "src"
+if str(_SHORT_MODEL_DIR) not in sys.path:
+    sys.path.insert(0, str(_SHORT_MODEL_DIR))
+
+from config import TICKERS, TICKER_TO_NAME, HORIZONS, to_yf_symbol
 from features import build_features, get_feature_cols
 
 
-# ── CSS (App.py'nin genel stilini bozmamak için scope'lu)
+# ── CSS (Analysis.py genel stilini bozmamak için scope'lu)
 _SHORT_CSS = """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap');
@@ -86,65 +93,73 @@ def _rgba(hex6: str, a: float) -> str:
 # ─────────────────────────────────────────────
 @st.cache_data(ttl=300, show_spinner=False)
 def _fetch_live(ticker: str) -> pd.DataFrame | None:
-    """yfinance — son 3 ay (tahmin için yeterli geçmiş lazım)"""
+    """yfinance — son 3-6 ay (tahmin için yeterli geçmiş lazım)"""
     try:
         sym = to_yf_symbol(ticker)
-        df = yf.download(sym, period="3mo", interval="1d",
+        df = yf.download(sym, period="6mo", interval="1d",
                          progress=False, auto_adjust=True)
         if df.empty:
             return None
+        
+        # Sütunları düzleştir (MultiIndex sorunu için)
         if isinstance(df.columns, pd.MultiIndex):
-            df.columns = df.columns.get_level_values(0)
+            # level name 'Price' veya 'Attribute' olanı bulmaya çalış veya 'Close' olan level'ı al
+            for level in range(df.columns.nlevels):
+                if "Close" in df.columns.get_level_values(level):
+                    df.columns = df.columns.get_level_values(level)
+                    break
+
         df.index = pd.to_datetime(df.index)
         df.index.name = "Date"
-        return df[["Open", "High", "Low", "Close", "Volume"]].dropna()
+        cols = ["Open", "High", "Low", "Close", "Volume"]
+        # Eksik sütunları 0 ile doldur veya sadece olanları al
+        available = [c for c in cols if c in df.columns]
+        if "Close" not in available: return None
+        
+        return df[available].apply(pd.to_numeric, errors="coerce").dropna()
     except Exception:
         return None
 
 
-@st.cache_data(show_spinner=False)
-def _load_kaggle(ticker: str) -> pd.DataFrame | None:
-    base = ticker.replace(".US", "") if ticker.endswith(".US") else ticker
-    for p in [DATA_DIR / f"{base}.US_D1.csv",
-              DATA_DIR / f"{ticker}_D1.csv",
-              DATA_DIR / f"{base.upper()}.US_D1.csv",
-              DATA_DIR / f"{ticker}.csv",
-              DATA_DIR / f"{base}.csv"]:
-        if not p.exists():
-            continue
-        try:
-            df = pd.read_csv(p)
-            df.columns = [c.strip().title() for c in df.columns]
-            df.rename(columns={"Adj Close": "Close", "Adj_Close": "Close"}, inplace=True)
-            dc = next((c for c in df.columns
-                       if c.lower() in ("date", "datetime", "time")), df.columns[0])
-            df[dc] = pd.to_datetime(df[dc], errors="coerce")
-            df = df.dropna(subset=[dc]).set_index(dc).sort_index()
-            df.index.name = "Date"
-            cols = ["Open", "High", "Low", "Close", "Volume"]
-            if not all(c in df.columns for c in cols):
-                continue
-            df = df[cols].apply(pd.to_numeric, errors="coerce").dropna()
-            df = df[(df["Close"] > 0) & (df["Volume"] > 0)]
-            if len(df) >= 200:
-                return df
-        except Exception:
-            continue
-    return None
+@st.cache_data(ttl=86400, show_spinner=False)
+def _fetch_yf_history(ticker: str) -> pd.DataFrame | None:
+    """yfinance — son 2 yıl günlük veri (özellik hesabı için)."""
+    try:
+        sym = to_yf_symbol(ticker)
+        df = yf.download(sym, period="2y", interval="1d",
+                         progress=False, auto_adjust=True)
+        if df.empty:
+            return None
+        
+        if isinstance(df.columns, pd.MultiIndex):
+            for level in range(df.columns.nlevels):
+                if "Close" in df.columns.get_level_values(level):
+                    df.columns = df.columns.get_level_values(level)
+                    break
+                    
+        df.index = pd.to_datetime(df.index)
+        df.index.name = "Date"
+        cols = ["Open", "High", "Low", "Close", "Volume"]
+        available = [c for c in cols if c in df.columns]
+        if "Close" not in available: return None
+        
+        df = df[available].apply(pd.to_numeric, errors="coerce").dropna()
+        df = df[(df["Close"] > 0)]
+        return df if len(df) >= 200 else None
+    except Exception:
+        return None
 
 
 def _load_bundle(ticker, h, algo):
-    p = _PROJECT_ROOT / "models" / ticker / f"{algo}_{h}d.pkl"
+    p = _PROJECT_ROOT / "models" / "short_term" / ticker / f"{algo}_{h}d.pkl"
     return pickle.load(open(p, "rb")) if p.exists() else None
 
 
 @st.cache_data(ttl=300, show_spinner=False)
 def _run_prediction(ticker: str) -> dict:
-    """
-    En son Kaggle verisi üzerinde tahmin üret.
-    Son satır = bugünün tahmini.
-    """
-    raw = _load_kaggle(ticker)
+    """yFinance geçmiş verisi üzerinde tahmin üretir.
+    Son satır = bugünün tahmini."""
+    raw = _fetch_yf_history(ticker)
     if raw is None:
         return {}
 
@@ -188,8 +203,8 @@ def _run_prediction(ticker: str) -> dict:
 
         avg = float(np.mean([v["prob"] for v in probs.values()]))
         avg_thr = float(np.mean([v["thr"] for v in probs.values()]))
-        sig = "UP" if avg >= avg_thr else "DOWN"
-        conf = avg if sig == "UP" else 1 - avg
+        sig = "YÜKSELİŞ" if avg >= avg_thr else "DÜŞÜŞ"
+        conf = avg if sig == "YÜKSELİŞ" else 1 - avg
 
         out[hk] = {
             "signal":     sig,
@@ -211,15 +226,14 @@ DOWN_C = "#ff4455"
 
 
 def render_short_dashboard(selected_ticker: str) -> None:
-    """App.py'den çağrılır. Seçilen hissenin kısa vadeli modelini gösterir."""
+    """Analiz.py'den çağrılır. Seçilen hissenin kısa vadeli modelini gösterir."""
 
     st.markdown(_SHORT_CSS, unsafe_allow_html=True)
 
     cname = TICKER_TO_NAME.get(selected_ticker, selected_ticker)
 
-    # ── Model / veri durumu bilgisi
-    kdf = _load_kaggle(selected_ticker)
-    model_dir = _PROJECT_ROOT / "models" / selected_ticker
+    # ── Model / veri durumu
+    model_dir = _PROJECT_ROOT / "models" / "short_term" / selected_ticker
     model_ok = model_dir.exists() and any(model_dir.glob("*.pkl"))
 
     if model_ok:
@@ -228,14 +242,11 @@ def render_short_dashboard(selected_ticker: str) -> None:
     else:
         st.warning(
             f"⚠ {selected_ticker} için eğitilmiş model bulunamadı.\n\n"
-            f"```\npoetry run python train.py --ticker {selected_ticker}\n```"
+            f"Eğitim için:\n"
+            f"```\npython models/short_term/src/train.py --ticker {selected_ticker}\n```"
         )
 
-    if kdf is not None:
-        last_train = kdf.index[-1].date()
-        st.caption(f"Eğitim verisi bitiş: {last_train} · {len(kdf):,} işlem günü")
-
-    # ── Canlı fiyat header
+    # ── Canlı fiyat başlığı
     live_df = _fetch_live(selected_ticker)
 
     if live_df is not None and len(live_df) >= 2:
@@ -257,8 +268,8 @@ def render_short_dashboard(selected_ticker: str) -> None:
             f"</div>"
             f"<div class='price-meta'>{selected_ticker} · Son kapanış {ld} · Yahoo Finance</div>"
             f"<div class='stat-row'>"
-            f"<span class='stat-item'>1A Yüksek &nbsp;${hi:,.2f}</span>"
-            f"<span class='stat-item'>1A Düşük &nbsp;${lo:,.2f}</span>"
+            f"<span class='stat-item'>3A Yüksek &nbsp;${hi:,.2f}</span>"
+            f"<span class='stat-item'>3A Düşük &nbsp;${lo:,.2f}</span>"
             f"<span class='stat-item'>Son Hacim &nbsp;{vol:,}</span>"
             f"</div>",
             unsafe_allow_html=True,
@@ -266,7 +277,7 @@ def render_short_dashboard(selected_ticker: str) -> None:
         ref_price = lc
         ref_date = live_df.index[-1]
     else:
-        st.warning(f"`{selected_ticker}` canlı fiyat yüklenemedi")
+        st.warning(f"`{selected_ticker}` canlı fiyat yüklenemedi.")
         ref_price = None
         ref_date = pd.Timestamp(date.today())
 
@@ -280,7 +291,7 @@ def render_short_dashboard(selected_ticker: str) -> None:
     st.markdown(
         f"<div class='sec-title'>Kısa Vadeli Tahminler"
         f"<span style='float:right;font-size:.65rem;color:#1e2a38'>"
-        f"Model eğitim verisi: {anchor_str}</span></div>",
+        f"Model veri tarihi: {anchor_str}</span></div>",
         unsafe_allow_html=True)
 
     cards = "<div class='pred-grid'>"
@@ -300,14 +311,15 @@ def render_short_dashboard(selected_ticker: str) -> None:
         vu = p["votes_up"]
         na = p["n_algos"]
 
-        cc = "card-up" if sig == "UP" else "card-down"
-        sc = "sig-up" if sig == "UP" else "sig-down"
-        ar = "↑" if sig == "UP" else "↓"
-        bc = "bar-up" if sig == "UP" else "bar-down"
+        is_up = sig == "YÜKSELİŞ"
+        cc = "card-up" if is_up else "card-down"
+        sc = "sig-up" if is_up else "sig-down"
+        ar = "↑" if is_up else "↓"
+        bc = "bar-up" if is_up else "bar-down"
 
         dots = "".join(
             f"<span class='vote' style='background:"
-            f"{'#00c47a' if (sig == 'UP' and i < vu) or (sig == 'DOWN' and i < (na - vu)) else '#ff4455'}'></span>"
+            f"{'#00c47a' if (is_up and i < vu) or (not is_up and i < (na - vu)) else '#ff4455'}'></span>"
             for i in range(na)
         )
         algo_names = {"lgbm": "LG", "xgb": "XG", "rf": "RF", "logreg": "LR"}
@@ -321,7 +333,7 @@ def render_short_dashboard(selected_ticker: str) -> None:
             f"<div class='pred-card {cc}'>"
             f"<div class='c-horizon'>{H_LABELS[hk]}</div>"
             f"<div class='c-signal {sc}'>{ar} {sig}</div>"
-            f"<div class='c-prob-num' style='color:{'#00c47a' if sig == 'UP' else '#ff4455'}'>"
+            f"<div class='c-prob-num' style='color:{'#00c47a' if is_up else '#ff4455'}'>"
             f"%{conf * 100:.0f}</div>"
             f"<div class='bar-bg'><div class='{bc}' style='width:{conf * 100:.0f}%'></div></div>"
             f"<div class='c-sub'>güven skoru</div>"
@@ -333,7 +345,7 @@ def render_short_dashboard(selected_ticker: str) -> None:
     st.markdown(cards, unsafe_allow_html=True)
 
     # ── Grafik — yfinance 1 ay + tahmin okları
-    st.markdown("<div class='sec-title'>Son 1 Ay Fiyat Hareketi & Tahmin Yönleri</div>",
+    st.markdown("<div class='sec-title'>Son 1 Ay Fiyat Hareketi &amp; Tahmin Yönleri</div>",
                 unsafe_allow_html=True)
 
     if live_df is not None and not live_df.empty:
@@ -373,7 +385,6 @@ def render_short_dashboard(selected_ticker: str) -> None:
         # ── Tahmin okları
         if ref_price and preds:
             last_date = chart_df.index[-1]
-
             COLORS = {"1d": UP_C, "3d": "#34d9a5", "5d": "#f0c040", "7d": "#a78bfa"}
             offsets = {"1d": 1, "3d": 3, "5d": 5, "7d": 7}
 
@@ -382,7 +393,7 @@ def render_short_dashboard(selected_ticker: str) -> None:
                     continue
                 p = preds[hk]
                 col = COLORS[hk]
-                dire = 1 if p["signal"] == "UP" else -1
+                dire = 1 if p["signal"] == "YÜKSELİŞ" else -1
                 conf = p["confidence"]
 
                 target_x = last_date + pd.tseries.offsets.BDay(offsets[hk])
@@ -395,11 +406,11 @@ def render_short_dashboard(selected_ticker: str) -> None:
                     arrowhead=3, arrowwidth=2.5,
                     arrowcolor=col, showarrow=True,
                 )
-                label = f"<b>{hk} {p['signal']}</b>"
+                label_txt = "YÜKSELİŞ" if p["signal"] == "YÜKSELİŞ" else "DÜŞÜŞ"
                 fig.add_annotation(
                     x=target_x,
                     y=target_y * (1 + dire * 0.005),
-                    text=label, showarrow=False,
+                    text=f"<b>{hk} {label_txt}</b>", showarrow=False,
                     font=dict(color=col, size=10, family="DM Mono"),
                     bgcolor="#07090f", borderpad=3,
                 )
@@ -439,7 +450,7 @@ def render_short_dashboard(selected_ticker: str) -> None:
     st.plotly_chart(fig, use_container_width=True)
 
     # ── Olasılık çubukları
-    st.markdown("<div class='sec-title'>Horizon Bazlı Güven Skoru</div>",
+    st.markdown("<div class='sec-title'>Ufuk Bazlı Güven Skoru</div>",
                 unsafe_allow_html=True)
 
     prob_rows = []
@@ -448,25 +459,25 @@ def render_short_dashboard(selected_ticker: str) -> None:
             continue
         p = preds[hk]
         prob_rows.append({
-            "h":    H_LABELS[hk],
-            "UP":   round(p["prob_up"] * 100, 1),
-            "DOWN": round((1 - p["prob_up"]) * 100, 1),
-            "sig":  p["signal"],
+            "h":       H_LABELS[hk],
+            "YUKSELIS": round(p["prob_up"] * 100, 1),
+            "DUSUS":    round((1 - p["prob_up"]) * 100, 1),
+            "sig":     p["signal"],
         })
 
     if prob_rows:
         pd2 = pd.DataFrame(prob_rows)
         f2 = go.Figure()
         f2.add_trace(go.Bar(
-            name="↑ UP", x=pd2["h"], y=pd2["UP"],
+            name="↑ YÜKSELİŞ", x=pd2["h"], y=pd2["YUKSELIS"],
             marker_color=UP_C,
-            text=[f"%{v:.0f}" for v in pd2["UP"]],
+            text=[f"%{v:.0f}" for v in pd2["YUKSELIS"]],
             textposition="inside",
             textfont=dict(color="white", size=14, family="DM Mono")))
         f2.add_trace(go.Bar(
-            name="↓ DOWN", x=pd2["h"], y=pd2["DOWN"],
+            name="↓ DÜŞÜŞ", x=pd2["h"], y=pd2["DUSUS"],
             marker_color=DOWN_C,
-            text=[f"%{v:.0f}" for v in pd2["DOWN"]],
+            text=[f"%{v:.0f}" for v in pd2["DUSUS"]],
             textposition="inside",
             textfont=dict(color="white", size=14, family="DM Mono")))
         f2.add_hline(y=50, line_dash="dot", line_color="#1a2535", line_width=1.5)
